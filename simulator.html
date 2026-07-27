@@ -1,0 +1,991 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MSTR - Price per share simulator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: light dark; }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page-plane);
+    color: var(--text-primary);
+  }
+
+  .viz-root {
+    color-scheme: light;
+    --page-plane:     #f9f9f7;
+    --surface-1:      #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6; /* blue   - common shareholders */
+    --series-2:       #eb6834; /* orange - debt claims */
+    --series-3:       #1baf7a; /* aqua   - cash reserves */
+    --warn-bg:        #fff4e5;
+    --warn-text:      #7a4a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --page-plane:     #0d0d0d;
+      --surface-1:      #1a1a19;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --series-1:       #3987e5;
+      --series-2:       #d95926;
+      --series-3:       #199e70;
+      --warn-bg:        #3a2a10;
+      --warn-text:      #f0c98a;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --page-plane:     #0d0d0d;
+    --surface-1:      #1a1a19;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-1:       #3987e5;
+    --series-2:       #d95926;
+    --series-3:       #199e70;
+    --warn-bg:        #3a2a10;
+    --warn-text:      #f0c98a;
+  }
+
+  .page {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 32px 20px 64px;
+  }
+
+  header h1 {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  header p {
+    margin: 0 0 28px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    max-width: 640px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 380px) 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 780px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .card + .card { margin-top: 20px; }
+
+  .card h2 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 16px;
+  }
+
+  .field { margin-bottom: 16px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: var(--text-primary);
+  }
+  .field .readout {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .field input[type="number"], .field input[type="text"] {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 14px;
+    border: 1px solid var(--baseline);
+    border-radius: 6px;
+    background: var(--surface-1);
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+  .field input[type="number"]:focus, .field input[type="text"]:focus {
+    outline: 2px solid var(--series-1);
+    outline-offset: 1px;
+  }
+  .mnav-row { display: flex; align-items: center; gap: 10px; }
+  .mnav-row input[type="range"] { flex: 1; accent-color: var(--series-1); }
+  .mnav-row input[type="text"] { width: 64px; flex: none; text-align: right; }
+
+  .live-status {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+  .live-status.ok { color: var(--text-secondary); }
+  .live-status.err { color: var(--warn-text); }
+
+  .preset-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .preset-btn {
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid var(--baseline);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .preset-btn:hover:not(:disabled) { background: var(--gridline); color: var(--text-primary); }
+  .preset-btn:disabled { opacity: 0.5; cursor: default; }
+  .preset-btn.active {
+    background: var(--text-primary);
+    color: var(--surface-1);
+    border-color: var(--text-primary);
+  }
+  .preset-btn.active:hover:not(:disabled) { background: var(--text-primary); color: var(--surface-1); }
+
+  .reset-btn {
+    margin-top: 18px;
+    width: 100%;
+    padding: 9px 10px;
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid var(--baseline);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .reset-btn:hover { background: var(--gridline); }
+
+  .warning {
+    background: var(--warn-bg);
+    color: var(--warn-text);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+    margin-bottom: 8px;
+  }
+  .stat-tile { }
+  .stat-tile .label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 3px;
+  }
+  .stat-tile .value {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-variant-numeric: proportional-nums;
+  }
+  .stat-tile.hero .value { font-size: 30px; }
+  .stat-tile .sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+  .chart-wrap {
+    display: flex;
+    gap: 28px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .donut-box { position: relative; width: 220px; height: 220px; flex: none; }
+  .donut-box svg { width: 100%; height: 100%; display: block; }
+  .donut-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    pointer-events: none;
+  }
+  .donut-center .num { font-size: 22px; font-weight: 600; color: var(--text-primary); line-height: 1.15; }
+  .donut-center .lbl { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  .legend { flex: 1; min-width: 220px; }
+  .legend-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--gridline);
+    font-size: 13px;
+  }
+  .legend-row:last-child { border-bottom: none; }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .legend-name { color: var(--text-primary); flex: 1; }
+  .legend-pct { font-weight: 600; color: var(--text-primary); width: 52px; text-align: right; font-variant-numeric: tabular-nums; }
+  .legend-btc { color: var(--text-secondary); width: 130px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .legend-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 0 7px;
+    margin-top: 2px;
+    border-top: 1px solid var(--baseline);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .legend-summary .legend-name { flex: 1; }
+  .legend-summary .legend-btc { color: var(--text-primary); width: 130px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .legend-extra {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .legend-extra .legend-name { flex: 1; }
+  .legend-extra .legend-btc { color: var(--text-secondary); width: 130px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .seg { cursor: pointer; }
+  .seg:hover { filter: brightness(1.08); }
+
+  .tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: var(--text-primary);
+    color: var(--surface-1);
+    font-size: 12px;
+    padding: 6px 9px;
+    border-radius: 6px;
+    line-height: 1.4;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.08s ease;
+    white-space: nowrap;
+  }
+  .tooltip.show { opacity: 1; }
+
+  .table-toggle {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 0;
+    margin-top: 14px;
+  }
+  table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+    font-size: 13px;
+    display: none;
+  }
+  table.data-table.show { display: table; }
+  table.data-table th, table.data-table td {
+    text-align: right;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--gridline);
+    font-variant-numeric: tabular-nums;
+  }
+  table.data-table th:first-child, table.data-table td:first-child { text-align: left; }
+  table.data-table th { color: var(--text-muted); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="viz-root">
+<div class="page">
+  <header>
+    <h1>MSTR Net Sats Per Share Simulator</h1>
+    <p>Theoretical composition of Strategy's (MSTR) BTC-backed balance sheet. Adjust any input to see how BTC claims from debt, cash reserves, and net BTC available to common shareholders shift.</p>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Inputs</h2>
+
+      <div class="field">
+        <label for="btcHeld">BTC held on balance sheet</label>
+        <input type="text" inputmode="decimal" id="btcHeld" value="843775" data-decimals="0">
+        <div class="readout" id="btcHeld-readout"></div>
+        <div class="live-status" id="btcHeldStatus">Fetching live BTC holdings&hellip;</div>
+      </div>
+
+      <div class="field">
+        <label for="debt">Total debt outstanding (preferred + convertible)</label>
+        <input type="text" inputmode="decimal" id="debt" value="22218000000" data-decimals="0">
+        <div class="readout" id="debt-readout"></div>
+        <div class="live-status" id="debtStatus">Fetching live debt data&hellip;</div>
+      </div>
+
+      <div class="field">
+        <label for="cash">USD cash reserve</label>
+        <input type="text" inputmode="decimal" id="cash" value="3225000000" data-decimals="0">
+        <div class="readout" id="cash-readout"></div>
+        <div class="live-status" id="cashStatus">Fetching live cash data&hellip;</div>
+      </div>
+
+      <div class="field">
+        <label for="btcPrice">BTC price</label>
+        <input type="text" inputmode="decimal" id="btcPrice" value="63948" data-decimals="0">
+        <div class="readout" id="btcPrice-readout"></div>
+        <div class="live-status" id="liveStatus">Fetching live BTC price&hellip;</div>
+        <div class="preset-row">
+          <button type="button" class="preset-btn" id="presetCurrent" disabled>Current price</button>
+          <button type="button" class="preset-btn" data-preset="50000">$50k</button>
+          <button type="button" class="preset-btn" data-preset="45000">$45k</button>
+          <button type="button" class="preset-btn" data-preset="40000">$40k</button>
+          <button type="button" class="preset-btn" data-preset="38000">$38k</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="fdso">Fully diluted shares outstanding (FDSO)</label>
+        <input type="text" inputmode="decimal" id="fdso" value="383219000" data-decimals="0">
+        <div class="readout" id="fdso-readout"></div>
+        <div class="live-status" id="fdsoStatus">Fetching live FDSO data&hellip;</div>
+        <div class="preset-row">
+          <button type="button" class="preset-btn" data-fdso-preset="-0.10">-10%</button>
+          <button type="button" class="preset-btn" data-fdso-preset="-0.05">-5%</button>
+          <button type="button" class="preset-btn" data-fdso-preset="0">Current</button>
+          <button type="button" class="preset-btn" data-fdso-preset="0.05">+5%</button>
+          <button type="button" class="preset-btn" data-fdso-preset="0.10">+10%</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="mnavRange">mNAV</label>
+        <div class="mnav-row">
+          <input type="range" id="mnavRange" min="0.9" max="1.1" step="0.01" value="1.0">
+          <input type="text" id="mnavNum" value="1.00">
+        </div>
+        <div class="preset-row">
+          <button type="button" class="preset-btn" data-mnav-preset="2">2x</button>
+          <button type="button" class="preset-btn" data-mnav-preset="3">3x</button>
+          <button type="button" class="preset-btn" data-mnav-preset="4">4x</button>
+        </div>
+      </div>
+
+      <button class="reset-btn" id="resetBtn">Reset to defaults</button>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>Computed</h2>
+        <div id="warningBox"></div>
+        <div class="stat-grid">
+          <div class="stat-tile hero">
+            <div class="label">MSTR estimated price</div>
+            <div class="value" id="out-mstrPrice">-</div>
+            <div class="sub">= BTC price &times; Net sats/share &divide; 100,000,000 &times; mNAV</div>
+          </div>
+          <div class="stat-tile">
+            <div class="label">BTC claims from debt</div>
+            <div class="value" id="out-btcClaims">-</div>
+          </div>
+          <div class="stat-tile">
+            <div class="label">BTC available to common</div>
+            <div class="value" id="out-btcCommon">-</div>
+          </div>
+          <div class="stat-tile">
+            <div class="label">BTC equivalent of cash</div>
+            <div class="value" id="out-btcCash">-</div>
+          </div>
+          <div class="stat-tile">
+            <div class="label">Net BTC available</div>
+            <div class="value" id="out-netBtc">-</div>
+          </div>
+          <div class="stat-tile">
+            <div class="label">Net sats per share</div>
+            <div class="value" id="out-netSats">-</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>BTC pool composition</h2>
+        <div class="chart-wrap">
+          <div class="donut-box">
+            <svg viewBox="0 0 220 220" id="donutSvg">
+              <g transform="rotate(-90 110 110)">
+                <circle class="donut-track" cx="110" cy="110" r="82" fill="none" stroke="var(--gridline)" stroke-width="30"></circle>
+                <circle class="seg" id="seg-common" cx="110" cy="110" r="82" fill="none" stroke="var(--series-1)" stroke-width="30" stroke-linecap="butt"></circle>
+                <circle class="seg" id="seg-claims" cx="110" cy="110" r="82" fill="none" stroke="var(--series-2)" stroke-width="30" stroke-linecap="butt"></circle>
+              </g>
+            </svg>
+            <div class="donut-center">
+              <div class="num" id="center-num">-</div>
+              <div class="lbl">net sats / share</div>
+            </div>
+          </div>
+          <div class="legend" id="legend"></div>
+        </div>
+        <div class="legend-summary" id="legendSummary"></div>
+        <div class="legend-extra" id="legendExtra"></div>
+        <button class="table-toggle" id="tableToggle">Show as table</button>
+        <table class="data-table" id="dataTable">
+          <thead>
+            <tr><th>Category</th><th>BTC</th><th>% of total BTC</th><th>USD equiv.</th></tr>
+          </thead>
+          <tbody id="dataTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+(function () {
+  const DEFAULTS = {
+    btcHeld: 843775,
+    debt: 22218000000,
+    cash: 3225000000,
+    btcPrice: 63948,
+    fdso: 383219000,
+    mnav: 1.0
+  };
+
+  const el = (id) => document.getElementById(id);
+  const inputs = {
+    btcHeld: el('btcHeld'),
+    debt: el('debt'),
+    cash: el('cash'),
+    btcPrice: el('btcPrice'),
+    fdso: el('fdso'),
+    mnavRange: el('mnavRange'),
+    mnavNum: el('mnavNum')
+  };
+
+  function fmtInt(n) {
+    return Math.round(n).toLocaleString('en-US');
+  }
+  function fmtBtc(n) {
+    return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function fmtUsdFull(n) {
+    return '$' + Math.round(n).toLocaleString('en-US');
+  }
+  function fmtPct(n) {
+    return (n * 100).toFixed(1) + '%';
+  }
+
+  function parseCommaNum(str) {
+    return parseFloat(String(str).replace(/,/g, '')) || 0;
+  }
+
+  function readValues() {
+    return {
+      btcHeld: parseCommaNum(inputs.btcHeld.value),
+      debt: parseCommaNum(inputs.debt.value),
+      cash: parseCommaNum(inputs.cash.value),
+      btcPrice: parseCommaNum(inputs.btcPrice.value),
+      fdso: parseCommaNum(inputs.fdso.value) || 1,
+      mnav: parseFloat(inputs.mnavNum.value) || 1
+    };
+  }
+
+  function formatField(inputEl) {
+    const decimals = parseInt(inputEl.dataset.decimals || '0', 10);
+    const num = parseCommaNum(inputEl.value);
+    inputEl.value = num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  }
+
+  function setFieldValue(inputEl, rawNumber) {
+    inputEl.value = String(rawNumber);
+    formatField(inputEl);
+  }
+
+  function compute(v) {
+    const valid = v.btcPrice > 0;
+
+    const btcClaims = valid ? v.debt / v.btcPrice : 0;
+    const btcCommon = valid ? v.btcHeld - btcClaims : 0;
+    const btcCash = valid ? v.cash / v.btcPrice : 0;
+    const netBtc = btcCommon + btcCash;
+    const netSats = netBtc * 1e8 / v.fdso;
+    const btcHeldTotal = btcCommon + btcClaims;
+    const mstrPrice = valid ? (v.btcPrice * netSats / 1e8) * v.mnav : 0;
+
+    return {
+      valid,
+      negativeCommon: btcCommon < 0,
+      btcClaims, btcCommon, btcCash, netBtc, netSats, btcHeldTotal, mstrPrice,
+      pctCommon: v.btcHeld > 0 ? btcCommon / v.btcHeld : 0,
+      pctClaims: v.btcHeld > 0 ? btcClaims / v.btcHeld : 0
+    };
+  }
+
+  const CIRC = 2 * Math.PI * 82;
+  const GAP = 3; // px of arc reserved as surface gap between segments
+
+  function setSeg(circleEl, startFrac, lenFrac) {
+    const len = Math.max(lenFrac * CIRC - GAP, 0);
+    circleEl.setAttribute('stroke-dasharray', `${len} ${CIRC - len}`);
+    circleEl.setAttribute('stroke-dashoffset', `${-(startFrac * CIRC)}`);
+  }
+
+  const legendEl = el('legend');
+  const legendSummaryEl = el('legendSummary');
+  const legendExtraEl = el('legendExtra');
+  const tooltipEl = el('tooltip');
+  const dataTableBody = el('dataTableBody');
+
+  const segMeta = [
+    { id: 'seg-common', key: 'pctCommon', btcKey: 'btcCommon', color: 'var(--series-1)', name: 'BTC available to common shareholders' },
+    { id: 'seg-claims', key: 'pctClaims', btcKey: 'btcClaims', color: 'var(--series-2)', name: 'BTC claims due to debt' }
+  ];
+
+  function attachHover(circleEl, meta, r) {
+    circleEl.addEventListener('mousemove', (e) => {
+      tooltipEl.innerHTML = `<strong>${meta.name}</strong><br>₿${fmtBtc(r[meta.btcKey])} · ${fmtPct(r[meta.key])}`;
+      tooltipEl.style.left = (e.clientX + 14) + 'px';
+      tooltipEl.style.top = (e.clientY + 14) + 'px';
+      tooltipEl.classList.add('show');
+    });
+    circleEl.addEventListener('mouseleave', () => tooltipEl.classList.remove('show'));
+  }
+
+  let hoverAttached = false;
+
+  function render() {
+    const v = readValues();
+    const r = compute(v);
+
+    el('out-mstrPrice').textContent = r.valid ? '$' + r.mstrPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    el('out-btcClaims').textContent = r.valid ? '₿' + fmtBtc(r.btcClaims) : '—';
+    el('out-btcCommon').textContent = r.valid ? '₿' + fmtBtc(r.btcCommon) : '—';
+    el('out-btcCash').textContent = r.valid ? '₿' + fmtBtc(r.btcCash) : '—';
+    el('out-netBtc').textContent = r.valid ? '₿' + fmtBtc(r.netBtc) : '—';
+    el('out-netSats').textContent = r.valid ? fmtInt(r.netSats) + ' sats' : '—';
+    el('center-num').textContent = r.valid ? fmtInt(r.netSats) : '—';
+
+    const warningBox = el('warningBox');
+    warningBox.innerHTML = '';
+    if (!r.valid) {
+      warningBox.innerHTML = '<div class="warning">BTC price must be positive for this model to compute.</div>';
+    } else if (r.negativeCommon) {
+      warningBox.innerHTML = '<div class="warning">Debt claims exceed total BTC held under these inputs — common shareholders\' BTC share is negative.</div>';
+    }
+
+    // readouts
+    el('btcHeld-readout').textContent = '₿' + fmtInt(v.btcHeld);
+    el('debt-readout').textContent = fmtUsdFull(v.debt);
+    el('cash-readout').textContent = fmtUsdFull(v.cash);
+    el('btcPrice-readout').textContent = '$' + Math.round(v.btcPrice).toLocaleString('en-US');
+    el('fdso-readout').textContent = fmtInt(v.fdso) + ' shares';
+
+    // donut
+    let cursor = 0;
+    segMeta.forEach((m) => {
+      const frac = Math.max(r[m.key], 0);
+      setSeg(el(m.id), cursor, frac);
+      cursor += frac;
+    });
+
+    if (!hoverAttached) {
+      segMeta.forEach((m) => attachHover(el(m.id), m, r));
+      hoverAttached = true;
+    }
+
+    // legend
+    legendEl.innerHTML = segMeta.map((m) => `
+      <div class="legend-row">
+        <span class="swatch" style="background:${m.color}"></span>
+        <span class="legend-name">${m.name}</span>
+        <span class="legend-pct">${r.valid ? fmtPct(r[m.key]) : '—'}</span>
+        <span class="legend-btc">₿${r.valid ? fmtBtc(r[m.btcKey]) : '—'}</span>
+      </div>
+    `).join('');
+
+    // summary line — common + claims must equal total BTC on balance sheet
+    legendSummaryEl.innerHTML = `
+      <span class="legend-name">Total BTC on balance sheet</span>
+      <span class="legend-btc">₿${r.valid ? fmtBtc(r.btcHeldTotal) : '—'}</span>
+    `;
+
+    // extra line — cash-equivalent BTC, additive on top of the pie above
+    legendExtraEl.innerHTML = `
+      <span class="swatch" style="background:var(--series-3)"></span>
+      <span class="legend-name">Extra BTC due to cash reserves</span>
+      <span class="legend-btc">+₿${r.valid ? fmtBtc(r.btcCash) : '—'}</span>
+    `;
+
+    // table
+    const cashRow = {
+      name: 'Extra BTC due to cash reserves',
+      btcKey: 'btcCash'
+    };
+    dataTableBody.innerHTML = segMeta.map((m) => `
+      <tr>
+        <td>${m.name}</td>
+        <td>₿${r.valid ? fmtBtc(r[m.btcKey]) : '—'}</td>
+        <td>${r.valid ? fmtPct(r[m.key]) : '—'}</td>
+        <td>${r.valid ? fmtUsdFull(r[m.btcKey] * v.btcPrice) : '—'}</td>
+      </tr>
+    `).join('') + `
+      <tr>
+        <td><strong>Total BTC on balance sheet</strong></td>
+        <td><strong>₿${r.valid ? fmtBtc(r.btcHeldTotal) : '—'}</strong></td>
+        <td><strong>${r.valid ? '100.0%' : '—'}</strong></td>
+        <td><strong>${r.valid ? fmtUsdFull(r.btcHeldTotal * v.btcPrice) : '—'}</strong></td>
+      </tr>
+      <tr>
+        <td>${cashRow.name}</td>
+        <td>+₿${r.valid ? fmtBtc(r[cashRow.btcKey]) : '—'}</td>
+        <td>—</td>
+        <td>${r.valid ? fmtUsdFull(r[cashRow.btcKey] * v.btcPrice) : '—'}</td>
+      </tr>
+    `;
+
+    updatePresetActiveStates(v);
+  }
+
+  function updatePresetActiveStates(v) {
+    const btcPriceRounded = Math.round(v.btcPrice);
+    document.querySelectorAll('.preset-btn[data-preset]').forEach((btn) => {
+      btn.classList.toggle('active', Math.round(parseFloat(btn.dataset.preset)) === btcPriceRounded);
+    });
+    presetCurrentBtn.classList.toggle('active', liveBtcPrice != null && Math.round(liveBtcPrice) === btcPriceRounded);
+
+    const fdsoRounded = Math.round(v.fdso);
+    document.querySelectorAll('.preset-btn[data-fdso-preset]').forEach((btn) => {
+      const delta = parseFloat(btn.dataset.fdsoPreset);
+      const target = Math.round(DEFAULTS.fdso * (1 + delta));
+      btn.classList.toggle('active', target === fdsoRounded);
+    });
+
+    document.querySelectorAll('.preset-btn[data-mnav-preset]').forEach((btn) => {
+      btn.classList.toggle('active', parseFloat(btn.dataset.mnavPreset).toFixed(2) === v.mnav.toFixed(2));
+    });
+  }
+
+  function bindMnavSync(fromRange) {
+    if (fromRange) {
+      inputs.mnavNum.value = parseFloat(inputs.mnavRange.value).toFixed(2);
+    } else {
+      let val = parseFloat(inputs.mnavNum.value);
+      if (isNaN(val)) val = 1;
+      val = Math.max(0, val);
+      inputs.mnavRange.value = val; // browser clamps the visible thumb to the 0.9-1.1 track
+      inputs.mnavNum.value = val.toFixed(2);
+    }
+  }
+
+  const numberFields = [inputs.btcHeld, inputs.debt, inputs.cash, inputs.btcPrice, inputs.fdso];
+  numberFields.forEach((i) => {
+    i.addEventListener('input', render);
+    i.addEventListener('blur', () => { formatField(i); render(); });
+  });
+  inputs.mnavRange.addEventListener('input', () => { bindMnavSync(true); render(); });
+  inputs.mnavNum.addEventListener('change', () => { bindMnavSync(false); render(); });
+
+  el('resetBtn').addEventListener('click', () => {
+    inputs.mnavRange.value = DEFAULTS.mnav;
+    inputs.mnavNum.value = DEFAULTS.mnav.toFixed(2);
+    render();
+    refreshAllLiveData();
+  });
+
+  el('tableToggle').addEventListener('click', () => {
+    const t = el('dataTable');
+    const showing = t.classList.toggle('show');
+    el('tableToggle').textContent = showing ? 'Hide table' : 'Show as table';
+  });
+
+  // BTC price presets
+  let liveBtcPrice = null;
+  const presetCurrentBtn = el('presetCurrent');
+  const liveStatusEl = el('liveStatus');
+  const btcHeldStatusEl = el('btcHeldStatus');
+  const debtStatusEl = el('debtStatus');
+  const cashStatusEl = el('cashStatus');
+  const fdsoStatusEl = el('fdsoStatus');
+
+  document.querySelectorAll('.preset-btn[data-preset]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      setFieldValue(inputs.btcPrice, parseFloat(btn.dataset.preset));
+      render();
+    });
+  });
+
+  document.querySelectorAll('.preset-btn[data-fdso-preset]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const delta = parseFloat(btn.dataset.fdsoPreset);
+      setFieldValue(inputs.fdso, Math.round(DEFAULTS.fdso * (1 + delta)));
+      render();
+    });
+  });
+
+  document.querySelectorAll('.preset-btn[data-mnav-preset]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const val = parseFloat(btn.dataset.mnavPreset);
+      inputs.mnavRange.value = val; // clamps to the 0.9-1.1 track visually
+      inputs.mnavNum.value = val.toFixed(2);
+      render();
+    });
+  });
+
+  async function fetchLiveBtcPrice() {
+    try {
+      const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
+      if (!res.ok) throw new Error('coingecko response not ok');
+      const data = await res.json();
+      const p = data && data.bitcoin && data.bitcoin.usd;
+      if (!(typeof p === 'number' && p > 0)) throw new Error('coingecko payload invalid');
+      return p;
+    } catch (e) {
+      const res2 = await fetch('https://api.coinbase.com/v2/prices/spot?currency=USD');
+      if (!res2.ok) throw new Error('coinbase response not ok');
+      const data2 = await res2.json();
+      const p2 = data2 && data2.data && parseFloat(data2.data.amount);
+      if (!(typeof p2 === 'number' && p2 > 0)) throw new Error('coinbase payload invalid');
+      return p2;
+    }
+  }
+
+  // Fetches a fresh price every time it runs — used on initial load AND on every
+  // "Current price" click, never a cached/stale value.
+  async function refreshLivePrice() {
+    presetCurrentBtn.disabled = true;
+    presetCurrentBtn.textContent = 'Fetching…';
+    try {
+      const price = await fetchLiveBtcPrice();
+      liveBtcPrice = price;
+      setFieldValue(inputs.btcPrice, Math.round(price));
+      render();
+      liveStatusEl.textContent = '';
+      liveStatusEl.className = 'live-status ok';
+    } catch (e) {
+      liveStatusEl.textContent = 'Live price unavailable — using manual/default value.';
+      liveStatusEl.className = 'live-status err';
+    } finally {
+      presetCurrentBtn.disabled = false;
+      presetCurrentBtn.textContent = 'Current price';
+    }
+  }
+
+  presetCurrentBtn.addEventListener('click', refreshLivePrice);
+
+  // Public CORS-friendly proxies used to read strategy.com pages that don't send
+  // their own Access-Control-Allow-Origin header. Tried in order; first success wins.
+  const CORS_PROXIES = [
+    (url) => 'https://api.cors.lol/?url=' + encodeURIComponent(url),
+    (url) => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+    (url) => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url)
+  ];
+
+  async function fetchHtmlViaProxy(url) {
+    let lastErr = new Error('no proxies configured');
+    for (const buildProxyUrl of CORS_PROXIES) {
+      try {
+        const res = await fetch(buildProxyUrl(url));
+        if (!res.ok) throw new Error('proxy response not ok: ' + res.status);
+        const text = await res.text();
+        if (!text || text.indexOf('__NEXT_DATA__') === -1) throw new Error('proxy payload missing expected content');
+        return text;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr;
+  }
+
+  // Pulls a top-level JSON array (e.g. "shares":[...]) out of strategy.com's embedded
+  // __NEXT_DATA__ blob by bracket-matching, since the page has no dedicated API for it.
+  function extractJsonArray(html, key) {
+    const marker = '"' + key + '":[';
+    const start = html.indexOf(marker);
+    if (start === -1) throw new Error('key not found: ' + key);
+    const arrStart = start + marker.length - 1;
+    let depth = 0, end = -1;
+    for (let i = arrStart; i < html.length; i++) {
+      if (html[i] === '[') depth++;
+      else if (html[i] === ']') { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end === -1) throw new Error('unterminated array for key: ' + key);
+    return JSON.parse(html.slice(arrStart, end + 1));
+  }
+
+  async function fetchBtcHeldLive() {
+    const res = await fetch('https://api.strategy.com/btc/bitcoinKpis');
+    if (!res.ok) throw new Error('bitcoinKpis response not ok');
+    const data = await res.json();
+    const held = data && data.results && data.results.btcHoldings;
+    const n = parseCommaNum(held);
+    if (!(n > 0)) throw new Error('bitcoinKpis payload invalid');
+    return n;
+  }
+
+  async function fetchMstrKpiLive() {
+    const res = await fetch('https://api.strategy.com/btc/mstrKpiData');
+    if (!res.ok) throw new Error('mstrKpiData response not ok');
+    const data = await res.json();
+    const row = data && data[0];
+    const debt = row && parseCommaNum(row.debt) * 1e6;
+    const pref = row && parseCommaNum(row.pref) * 1e6;
+    const price = row && parseFloat(row.price);
+    if (!(debt > 0) || !(pref > 0) || !(price > 0)) throw new Error('mstrKpiData payload invalid');
+    return { debt, pref, price };
+  }
+
+  async function fetchCashLive() {
+    const html = await fetchHtmlViaProxy('https://www.strategy.com/');
+    const arr = extractJsonArray(html, 'btcTrackerData');
+    const row = arr.find((r) => r.latest) || arr[arr.length - 1];
+    if (!row || !(row.cash > 0)) throw new Error('btcTrackerData payload invalid');
+    return row.cash;
+  }
+
+  // Conversion prices for MSTR's convertible note tranches, mirroring the hardcoded
+  // table strategy.com/shares itself uses to decide which converts are in-the-money.
+  const CONVERT_CONVERSION_PRICES = {
+    converts_shares_2028: 183.19,
+    converts_shares_2029: 672.40,
+    converts_shares_2030: 149.77,
+    converts_shares_2030_b: 433.43,
+    converts_shares_2031: 232.72,
+    converts_shares_2032: 204.33,
+    converts_shares_strk: 1000
+  };
+
+  async function fetchFdsoLive(currentMstrPrice) {
+    const html = await fetchHtmlViaProxy('https://www.strategy.com/shares');
+    const arr = extractJsonArray(html, 'shares');
+    const row = arr[arr.length - 1];
+    if (!row) throw new Error('shares payload empty');
+    const basic = Number(row.basic_shares_outstanding) || 0;
+    const options = Number(row.options_outstanding) || 0;
+    const rsu = Number(row.rsu_psu_unvested) || 0;
+    let itmConverts = 0;
+    for (const field in CONVERT_CONVERSION_PRICES) {
+      const shares = row[field];
+      if (shares != null && currentMstrPrice >= CONVERT_CONVERSION_PRICES[field]) {
+        itmConverts += Number(shares);
+      }
+    }
+    const totalThousands = basic + options + rsu + itmConverts;
+    if (!(totalThousands > 0)) throw new Error('shares payload invalid');
+    return totalThousands * 1000;
+  }
+
+  function setStatus(el, ok, errMsg) {
+    if (ok) {
+      el.textContent = '';
+      el.className = 'live-status ok';
+    } else {
+      el.textContent = errMsg;
+      el.className = 'live-status err';
+    }
+  }
+
+  // Fetches every live-sourced input fresh — used on initial load AND every
+  // "Reset to defaults" click. Each field falls back to its last-known DEFAULTS
+  // value independently if its own fetch fails, so one bad source doesn't block the rest.
+  async function refreshAllLiveData() {
+    setStatus(btcHeldStatusEl, false, 'Fetching live BTC holdings…');
+    setStatus(debtStatusEl, false, 'Fetching live debt data…');
+    setStatus(cashStatusEl, false, 'Fetching live cash data…');
+    setStatus(fdsoStatusEl, false, 'Fetching live FDSO data…');
+
+    const [priceResult, btcHeldResult, mstrKpiResult] = await Promise.allSettled([
+      refreshLivePrice(),
+      fetchBtcHeldLive(),
+      fetchMstrKpiLive()
+    ]);
+
+    if (btcHeldResult.status === 'fulfilled') {
+      setFieldValue(inputs.btcHeld, Math.round(btcHeldResult.value));
+      setStatus(btcHeldStatusEl, true);
+    } else {
+      setFieldValue(inputs.btcHeld, DEFAULTS.btcHeld);
+      setStatus(btcHeldStatusEl, false, 'Live data unavailable — using last known value.');
+    }
+
+    let mstrPrice = null;
+    if (mstrKpiResult.status === 'fulfilled') {
+      const { debt, pref, price } = mstrKpiResult.value;
+      setFieldValue(inputs.debt, Math.round(debt + pref));
+      setStatus(debtStatusEl, true);
+      mstrPrice = price;
+    } else {
+      setFieldValue(inputs.debt, DEFAULTS.debt);
+      setStatus(debtStatusEl, false, 'Live data unavailable — using last known value.');
+    }
+
+    const [cashResult, fdsoResult] = await Promise.allSettled([
+      fetchCashLive(),
+      (async () => {
+        const price = mstrPrice != null ? mstrPrice : (await fetchMstrKpiLive()).price;
+        return fetchFdsoLive(price);
+      })()
+    ]);
+
+    if (cashResult.status === 'fulfilled') {
+      setFieldValue(inputs.cash, Math.round(cashResult.value));
+      setStatus(cashStatusEl, true);
+    } else {
+      setFieldValue(inputs.cash, DEFAULTS.cash);
+      setStatus(cashStatusEl, false, 'Live data unavailable — using last known value.');
+    }
+
+    if (fdsoResult.status === 'fulfilled') {
+      setFieldValue(inputs.fdso, Math.round(fdsoResult.value));
+      setStatus(fdsoStatusEl, true);
+    } else {
+      setFieldValue(inputs.fdso, DEFAULTS.fdso);
+      setStatus(fdsoStatusEl, false, 'Live data unavailable — using last known value.');
+    }
+
+    render();
+  }
+
+  // Look up all live-sourced inputs on initial page load.
+  refreshAllLiveData();
+
+  numberFields.forEach(formatField);
+  render();
+})();
+</script>
+</body>
+</html>
