@@ -25,15 +25,26 @@ Whichever preset button currently matches a field's value is highlighted — whe
 
 ## Live data
 
-On page load, and whenever **"Reset to defaults"** is pressed, BTC price, BTC held, and total debt outstanding refresh from live sources. Each fetch is independent — if one source fails, the others still resolve normally, and only the failing field falls back to its hardcoded default with its own status message ("Fetching live … data…" while in flight, cleared on success, or "Live data unavailable — using last known value." on failure).
+On page load, and whenever **"Reset to defaults"** is pressed, BTC price, BTC held, USD cash reserve, and total debt outstanding refresh from live sources. Each fetch is independent — if one source fails, the others still resolve normally, and only the failing field falls back to its hardcoded default with its own status message ("Fetching live … data…" while in flight, cleared on success, or "Live data unavailable — using last known value." on failure).
 
 | Field | Source | Method |
 |---|---|---|
 | BTC price | CoinGecko, falling back to Coinbase | Direct fetch |
 | BTC held | `api.strategy.com/btc/bitcoinKpis` → `btcHoldings` | Direct fetch (CORS-enabled) |
+| USD cash reserve | `api.strategy.com/btc/bitcoinKpis` → `totalAnnualDividends` × `usdMonthsOfDividends` / 12 | Direct fetch (CORS-enabled), derived (see below) |
 | Total debt outstanding | `api.strategy.com/btc/mstrKpiData` → `debt` + `pref` (in $M) | Direct fetch (CORS-enabled) |
 
-USD cash reserve and FDSO are **not** live-fetched — they reset to their hardcoded defaults on load/Reset. Strategy.com exposes no CORS-enabled API for either figure (only the two KPI endpoints above allow direct browser access); routing them through a public CORS proxy was tried and dropped, since the proxies proved too unreliable in practice — aggressive rate limits (~1 request/30s), and strategy.com's Cloudflare protection blocking several proxy providers' IPs outright.
+### Cash reserve derivation
+
+`bitcoinKpis` doesn't expose the USD cash reserve directly, but it can be recovered from two fields it does return: `usdMonthsOfDividends` (how many months the cash reserve covers at the current annualized dividend run-rate) and `totalAnnualDividends`:
+
+```
+cash = usdMonthsOfDividends × (totalAnnualDividends / 12)
+```
+
+This reproduces the reserve figure exactly (validated against a known $3,225,000,000 reserve) without needing a CORS proxy.
+
+FDSO is the only field that's **not** live-fetched — it resets to its hardcoded default on load/Reset. Strategy.com exposes no CORS-enabled API for the per-tranche convertible-note data FDSO requires (only the two KPI endpoints above allow direct browser access); routing it through a public CORS proxy was tried and dropped, since the proxies proved too unreliable in practice — aggressive rate limits (~1 request/30s), and strategy.com's Cloudflare protection blocking several proxy providers' IPs outright.
 
 ## Computed outputs
 
@@ -59,7 +70,7 @@ Hovering a donut segment shows its exact BTC amount and percentage. A "Show as t
 
 ## Other behavior
 
-- **Reset to defaults**: re-triggers live fetches for BTC price, BTC held, and debt (falling back to hardcoded defaults per-field on failure); resets cash, FDSO, and mNAV to their hardcoded defaults.
+- **Reset to defaults**: re-triggers live fetches for BTC price, BTC held, cash, and debt (falling back to hardcoded defaults per-field on failure); resets FDSO and mNAV to their hardcoded defaults.
 - **Warnings**: shown if BTC price is zero or negative (model can't compute), or if debt claims exceed total BTC held (negative common-shareholder BTC).
 - Supports both light and dark mode.
 

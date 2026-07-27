@@ -360,6 +360,7 @@
         <label for="cash">USD cash reserve</label>
         <input type="text" inputmode="decimal" id="cash" value="3225000000" data-decimals="0">
         <div class="readout" id="cash-readout"></div>
+        <div class="live-status" id="cashStatus">Fetching live cash data&hellip;</div>
       </div>
 
       <div class="field">
@@ -719,7 +720,6 @@
   inputs.mnavNum.addEventListener('change', () => { bindMnavSync(false); render(); });
 
   el('resetBtn').addEventListener('click', () => {
-    setFieldValue(inputs.cash, DEFAULTS.cash);
     setFieldValue(inputs.fdso, DEFAULTS.fdso);
     inputs.mnavRange.value = DEFAULTS.mnav;
     inputs.mnavNum.value = DEFAULTS.mnav.toFixed(2);
@@ -739,6 +739,7 @@
   const liveStatusEl = el('liveStatus');
   const btcHeldStatusEl = el('btcHeldStatus');
   const debtStatusEl = el('debtStatus');
+  const cashStatusEl = el('cashStatus');
 
   document.querySelectorAll('.preset-btn[data-preset]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -805,14 +806,20 @@
 
   presetCurrentBtn.addEventListener('click', refreshLivePrice);
 
-  async function fetchBtcHeldLive() {
+  // USD cash reserve isn't exposed directly by bitcoinKpis, but can be recovered from
+  // two fields it does expose: usdMonthsOfDividends (how many months the cash reserve
+  // covers at the current annualized dividend run-rate) and totalAnnualDividends.
+  // cash = usdMonthsOfDividends * (totalAnnualDividends / 12)
+  async function fetchBitcoinKpisLive() {
     const res = await fetch('https://api.strategy.com/btc/bitcoinKpis');
     if (!res.ok) throw new Error('bitcoinKpis response not ok');
     const data = await res.json();
-    const held = data && data.results && data.results.btcHoldings;
-    const n = parseCommaNum(held);
-    if (!(n > 0)) throw new Error('bitcoinKpis payload invalid');
-    return n;
+    const r = data && data.results;
+    const btcHeld = r && parseCommaNum(r.btcHoldings);
+    const cash = r && Number(r.totalAnnualDividends) * Number(r.usdMonthsOfDividends) / 12;
+    if (!(btcHeld > 0)) throw new Error('bitcoinKpis btcHoldings invalid');
+    if (!(cash > 0)) throw new Error('bitcoinKpis dividend-coverage fields invalid');
+    return { btcHeld, cash };
   }
 
   async function fetchMstrKpiLive() {
@@ -840,25 +847,32 @@
   // Fetches every live-sourced input fresh — used on initial load AND every
   // "Reset to defaults" click. Each field falls back to its last-known DEFAULTS
   // value independently if its own fetch fails, so one bad source doesn't block the rest.
-  // Cash and FDSO are not live-sourced: strategy.com exposes no CORS-enabled API for
-  // them, and public CORS proxies proved too unreliable (aggressive rate limits, and
-  // strategy.com's Cloudflare WAF blocking the proxies' own IPs outright).
+  // FDSO is not live-sourced: strategy.com exposes no CORS-enabled API for the
+  // per-tranche convert data it requires, and public CORS proxies proved too
+  // unreliable (aggressive rate limits, and strategy.com's Cloudflare WAF blocking
+  // the proxies' own IPs outright).
   async function refreshAllLiveData() {
     setStatus(btcHeldStatusEl, false, 'Fetching live BTC holdings…');
     setStatus(debtStatusEl, false, 'Fetching live debt data…');
+    setStatus(cashStatusEl, false, 'Fetching live cash data…');
 
-    const [priceResult, btcHeldResult, mstrKpiResult] = await Promise.allSettled([
+    const [priceResult, bitcoinKpisResult, mstrKpiResult] = await Promise.allSettled([
       refreshLivePrice(),
-      fetchBtcHeldLive(),
+      fetchBitcoinKpisLive(),
       fetchMstrKpiLive()
     ]);
 
-    if (btcHeldResult.status === 'fulfilled') {
-      setFieldValue(inputs.btcHeld, Math.round(btcHeldResult.value));
+    if (bitcoinKpisResult.status === 'fulfilled') {
+      const { btcHeld, cash } = bitcoinKpisResult.value;
+      setFieldValue(inputs.btcHeld, Math.round(btcHeld));
       setStatus(btcHeldStatusEl, true);
+      setFieldValue(inputs.cash, Math.round(cash));
+      setStatus(cashStatusEl, true);
     } else {
       setFieldValue(inputs.btcHeld, DEFAULTS.btcHeld);
       setStatus(btcHeldStatusEl, false, 'Live data unavailable — using last known value.');
+      setFieldValue(inputs.cash, DEFAULTS.cash);
+      setStatus(cashStatusEl, false, 'Live data unavailable — using last known value.');
     }
 
     if (mstrKpiResult.status === 'fulfilled') {
