@@ -1,4 +1,4 @@
-# MSTR Net Sats Per Share Simulator
+# MSTR - Price per share simulator
 
 A single-page HTML simulator that models Strategy's (MSTR, Nasdaq) theoretical share price based on its BTC-backed balance sheet. All inputs are editable, each has a sensible default, and several are kept live via public APIs. All numbers (inputs and computed outputs) use thousand separators.
 
@@ -25,40 +25,15 @@ Whichever preset button currently matches a field's value is highlighted — whe
 
 ## Live data
 
-On page load, and whenever **"Reset to defaults"** is pressed, five inputs refresh from live sources. Each fetch is independent — if one source fails, the others still resolve normally, and only the failing field falls back to its hardcoded default with its own status message ("Fetching live … data…" while in flight, cleared on success, or "Live data unavailable — using last known value." on failure). mNAV always resets to 1.0, since it has no live source.
+On page load, and whenever **"Reset to defaults"** is pressed, BTC price, BTC held, and total debt outstanding refresh from live sources. Each fetch is independent — if one source fails, the others still resolve normally, and only the failing field falls back to its hardcoded default with its own status message ("Fetching live … data…" while in flight, cleared on success, or "Live data unavailable — using last known value." on failure).
 
 | Field | Source | Method |
 |---|---|---|
 | BTC price | CoinGecko, falling back to Coinbase | Direct fetch |
 | BTC held | `api.strategy.com/btc/bitcoinKpis` → `btcHoldings` | Direct fetch (CORS-enabled) |
 | Total debt outstanding | `api.strategy.com/btc/mstrKpiData` → `debt` + `pref` (in $M) | Direct fetch (CORS-enabled) |
-| USD cash reserve | strategy.com homepage's embedded `btcTrackerData.cash` | Routed through a CORS proxy chain, since the page itself sends no CORS header |
-| FDSO | strategy.com/shares's embedded share-count data | Routed through the same CORS proxy chain, then computed client-side (see below) |
 
-CORS proxy chain (tried in order, first success wins): `api.cors.lol` → `api.allorigins.win` → `api.codetabs.com`.
-
-### FDSO calculation
-
-FDSO isn't directly exposed by any API, so it's replicated from strategy.com's own logic:
-
-```
-FDSO = basic_shares_outstanding
-     + options_outstanding
-     + rsu_psu_unvested
-     + shares of any convertible note tranche whose conversion price ≤ current MSTR price
-```
-
-Conversion prices are hardcoded to mirror strategy.com's own table:
-
-| Tranche | Conversion price |
-|---|---|
-| 2028 | $183.19 |
-| 2029 | $672.40 |
-| 2030 | $149.77 |
-| 2030B | $433.43 |
-| 2031 | $232.72 |
-| 2032 | $204.33 |
-| STRK | $1,000.00 |
+USD cash reserve and FDSO are **not** live-fetched — they reset to their hardcoded defaults on load/Reset. Strategy.com exposes no CORS-enabled API for either figure (only the two KPI endpoints above allow direct browser access); routing them through a public CORS proxy was tried and dropped, since the proxies proved too unreliable in practice — aggressive rate limits (~1 request/30s), and strategy.com's Cloudflare protection blocking several proxy providers' IPs outright.
 
 ## Computed outputs
 
@@ -84,7 +59,7 @@ Hovering a donut segment shows its exact BTC amount and percentage. A "Show as t
 
 ## Other behavior
 
-- **Reset to defaults**: re-triggers live fetches for BTC price, BTC held, debt, cash, and FDSO (falling back to hardcoded defaults per-field on failure); resets mNAV to 1.0.
+- **Reset to defaults**: re-triggers live fetches for BTC price, BTC held, and debt (falling back to hardcoded defaults per-field on failure); resets cash, FDSO, and mNAV to their hardcoded defaults.
 - **Warnings**: shown if BTC price is zero or negative (model can't compute), or if debt claims exceed total BTC held (negative common-shareholder BTC).
 - Supports both light and dark mode.
 
