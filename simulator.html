@@ -225,7 +225,6 @@
     font-variant-numeric: proportional-nums;
   }
   .stat-tile.hero .value { font-size: 30px; }
-  #out-mstrActual { font-weight: 400; }
   .stat-tile .sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 
   .chart-wrap {
@@ -375,7 +374,7 @@
         <div class="readout" id="btcPrice-readout"></div>
         <div class="live-status" id="liveStatus">Fetching live BTC price&hellip;</div>
         <div class="preset-row">
-          <button type="button" class="preset-btn" id="presetCurrent" disabled>Current</button>
+          <button type="button" class="preset-btn" id="presetCurrent" disabled>Current price</button>
           <button type="button" class="preset-btn" data-preset="50000">$50k</button>
           <button type="button" class="preset-btn" data-preset="45000">$45k</button>
           <button type="button" class="preset-btn" data-preset="40000">$40k</button>
@@ -420,17 +419,17 @@
           <div class="stat-tile hero">
             <div class="label">MSTR estimated price</div>
             <div class="value" id="out-mstrPrice">-</div>
-            <div class="sub">BTC price &times; Net sats/share &divide;<br>100,000,000 &times; mNAV</div>
+            <div class="sub">= BTC price &times; Net sats/share &divide; 100,000,000 &times; mNAV</div>
           </div>
           <div class="stat-tile hero">
             <div class="label">MSTR actual price</div>
             <div class="value" id="out-mstrActual">-</div>
-            <div class="sub">RTH only</div>
+            <div class="sub">Live from strategy.com</div>
           </div>
           <div class="stat-tile hero">
             <div class="label">Implied mNAV</div>
             <div class="value" id="out-impliedMnav">-</div>
-            <div class="sub">MSTR actual price &divide; MSTR estimated price</div>
+            <div class="sub">= MSTR actual price &divide; MSTR estimated price</div>
           </div>
         </div>
         <!-- Spacer row: keeps the card's height unchanged after the Net BTC available /
@@ -686,6 +685,12 @@
         <td>—</td>
         <td>${r.valid ? fmtUsdFull(r[cashRow.btcKey] * v.btcPrice) : '—'}</td>
       </tr>
+      <tr>
+        <td><strong>Net reserve</strong></td>
+        <td><strong>₿${r.valid ? fmtBtc(r.netBtc) : '—'}</strong></td>
+        <td>—</td>
+        <td><strong>${r.valid ? fmtUsdFull(r.netBtc * v.btcPrice) : '—'}</strong></td>
+      </tr>
     `;
 
     updatePresetActiveStates(v);
@@ -812,7 +817,7 @@
       liveStatusEl.className = 'live-status err';
     } finally {
       presetCurrentBtn.disabled = false;
-      presetCurrentBtn.textContent = 'Current';
+      presetCurrentBtn.textContent = 'Current price';
     }
   }
 

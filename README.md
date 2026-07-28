@@ -73,7 +73,7 @@ Below the chart:
 - a summary line confirming common + claims matches the "BTC held on balance sheet" input (built-in sanity check)
 - a separate additive line for "extra BTC due to cash reserves" (shown as `+X`, since it sits outside the two-slice 100% pie)
 
-Hovering a donut segment shows its exact BTC amount and percentage. A "Show as table" toggle presents the same data accessibly (category, BTC amount, % of total BTC, USD equivalent), including the subtotal and cash "extra" row.
+Hovering a donut segment shows its exact BTC amount and percentage. A "Show as table" toggle presents the same data accessibly (category, BTC amount, % of total BTC, USD equivalent), including the subtotal, cash "extra" row, and a **Net reserve** row (BTC available to common shareholders + extra BTC due to cash reserves — i.e. Net BTC available).
 
 ## Other behavior
 
