@@ -207,7 +207,12 @@
     gap: 14px;
     margin-bottom: 8px;
   }
+  .stat-grid.cols3 { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 480px) {
+    .stat-grid.cols3 { grid-template-columns: 1fr; }
+  }
   .stat-tile { }
+  .stat-tile.centered { text-align: center; }
   .stat-tile .label {
     font-size: 12px;
     color: var(--text-secondary);
@@ -220,6 +225,7 @@
     font-variant-numeric: proportional-nums;
   }
   .stat-tile.hero .value { font-size: 30px; }
+  #out-mstrActual { font-weight: 400; }
   .stat-tile .sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 
   .chart-wrap {
@@ -379,7 +385,7 @@
 
       <div class="field">
         <label for="fdso">Fully diluted shares outstanding (FDSO)</label>
-        <input type="text" inputmode="decimal" id="fdso" value="383219000" data-decimals="0">
+        <input type="text" inputmode="decimal" id="fdso" value="388648000" data-decimals="0">
         <div class="readout" id="fdso-readout"></div>
         <div class="preset-row">
           <button type="button" class="preset-btn" data-fdso-preset="-0.10">-10%</button>
@@ -410,31 +416,38 @@
       <div class="card">
         <h2>Computed</h2>
         <div id="warningBox"></div>
-        <div class="stat-grid">
+        <div class="stat-grid cols3">
           <div class="stat-tile hero">
             <div class="label">MSTR estimated price</div>
             <div class="value" id="out-mstrPrice">-</div>
-            <div class="sub">= BTC price &times; Net sats/share &divide; 100,000,000 &times; mNAV</div>
+            <div class="sub">BTC price &times; Net sats/share &divide;<br>100,000,000 &times; mNAV</div>
+          </div>
+          <div class="stat-tile hero">
+            <div class="label">MSTR actual price</div>
+            <div class="value" id="out-mstrActual">-</div>
+            <div class="sub">RTH only</div>
+          </div>
+          <div class="stat-tile hero">
+            <div class="label">Implied mNAV</div>
+            <div class="value" id="out-impliedMnav">-</div>
+            <div class="sub">MSTR actual price &divide; MSTR estimated price</div>
+          </div>
+        </div>
+        <!-- Spacer row: keeps the card's height unchanged after the Net BTC available /
+             Net sats per share tiles were removed. Same markup/classes as a real stat
+             row so it renders at an identical height, just with no visible content. -->
+        <div class="stat-grid cols3" aria-hidden="true">
+          <div class="stat-tile">
+            <div class="label">&nbsp;</div>
+            <div class="value">&nbsp;</div>
           </div>
           <div class="stat-tile">
-            <div class="label">BTC claims from debt</div>
-            <div class="value" id="out-btcClaims">-</div>
+            <div class="label">&nbsp;</div>
+            <div class="value">&nbsp;</div>
           </div>
           <div class="stat-tile">
-            <div class="label">BTC available to common</div>
-            <div class="value" id="out-btcCommon">-</div>
-          </div>
-          <div class="stat-tile">
-            <div class="label">BTC equivalent of cash</div>
-            <div class="value" id="out-btcCash">-</div>
-          </div>
-          <div class="stat-tile">
-            <div class="label">Net BTC available</div>
-            <div class="value" id="out-netBtc">-</div>
-          </div>
-          <div class="stat-tile">
-            <div class="label">Net sats per share</div>
-            <div class="value" id="out-netSats">-</div>
+            <div class="label">&nbsp;</div>
+            <div class="value">&nbsp;</div>
           </div>
         </div>
       </div>
@@ -481,7 +494,7 @@
     debt: 22218000000,
     cash: 3225000000,
     btcPrice: 63948,
-    fdso: 383219000,
+    fdso: 388648000,
     mnav: 1.0
   };
 
@@ -592,11 +605,9 @@
     const r = compute(v);
 
     el('out-mstrPrice').textContent = r.valid ? '$' + r.mstrPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-    el('out-btcClaims').textContent = r.valid ? '₿' + fmtBtc(r.btcClaims) : '—';
-    el('out-btcCommon').textContent = r.valid ? '₿' + fmtBtc(r.btcCommon) : '—';
-    el('out-btcCash').textContent = r.valid ? '₿' + fmtBtc(r.btcCash) : '—';
-    el('out-netBtc').textContent = r.valid ? '₿' + fmtBtc(r.netBtc) : '—';
-    el('out-netSats').textContent = r.valid ? fmtInt(r.netSats) + ' sats' : '—';
+    el('out-mstrActual').textContent = mstrActualPrice != null ? '$' + mstrActualPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    const impliedMnav = (mstrActualPrice != null && r.valid && r.mstrPrice > 0) ? mstrActualPrice / r.mstrPrice : null;
+    el('out-impliedMnav').textContent = impliedMnav != null ? impliedMnav.toFixed(2) + 'x' : '—';
     el('center-num').textContent = r.valid ? fmtInt(r.netSats) : '—';
 
     const warningBox = el('warningBox');
@@ -735,6 +746,7 @@
 
   // BTC price presets
   let liveBtcPrice = null;
+  let mstrActualPrice = null;
   const presetCurrentBtn = el('presetCurrent');
   const liveStatusEl = el('liveStatus');
   const btcHeldStatusEl = el('btcHeldStatus');
@@ -829,9 +841,9 @@
     const row = data && data[0];
     const debt = row && parseCommaNum(row.debt) * 1e6;
     const pref = row && parseCommaNum(row.pref) * 1e6;
-    const price = row && parseFloat(row.price);
-    if (!(debt > 0) || !(pref > 0) || !(price > 0)) throw new Error('mstrKpiData payload invalid');
-    return { debt, pref, price };
+    const ufPrice = row && Number(row.ufPrice);
+    if (!(debt > 0) || !(pref > 0) || !(ufPrice > 0)) throw new Error('mstrKpiData payload invalid');
+    return { debt, pref, ufPrice };
   }
 
   function setStatus(el, ok, errMsg) {
@@ -876,12 +888,14 @@
     }
 
     if (mstrKpiResult.status === 'fulfilled') {
-      const { debt, pref } = mstrKpiResult.value;
+      const { debt, pref, ufPrice } = mstrKpiResult.value;
       setFieldValue(inputs.debt, Math.round(debt + pref));
       setStatus(debtStatusEl, true);
+      mstrActualPrice = ufPrice;
     } else {
       setFieldValue(inputs.debt, DEFAULTS.debt);
       setStatus(debtStatusEl, false, 'Live data unavailable — using last known value.');
+      mstrActualPrice = null;
     }
 
     render();

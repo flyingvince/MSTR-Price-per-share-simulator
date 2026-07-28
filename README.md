@@ -10,7 +10,7 @@ A single-page HTML simulator that models Strategy's (MSTR, Nasdaq) theoretical s
 | BTC held on balance sheet | ₿843,775 | |
 | Total debt outstanding (preferred + convertible) | $22,218,000,000 | |
 | USD cash reserve | $3,225,000,000 | |
-| Fully diluted shares outstanding (FDSO) | 383,219,000 shares | |
+| Fully diluted shares outstanding (FDSO) | 388,648,000 shares | |
 | mNAV | 1.0 | Slider range 0.9–1.1, step 0.01, synced with an editable number field |
 
 Share price is **not** a direct input — it's replaced by the computed "MSTR estimated price" output.
@@ -18,7 +18,7 @@ Share price is **not** a direct input — it's replaced by the computed "MSTR es
 ### Preset buttons
 
 - **BTC price**: "Current price" (re-fetches the live price), "$50k", "$45k", "$40k", "$38k"
-- **FDSO**: "-10%", "-5%", "Current" (= 383,219,000 baseline), "+5%", "+10%"
+- **FDSO**: "-10%", "-5%", "Current" (= 388,648,000 baseline), "+5%", "+10%"
 - **mNAV**: "2x", "3x", "4x" (jumps the number field directly, even outside the slider's visible 0.9–1.1 track)
 
 Whichever preset button currently matches a field's value is highlighted — whether that state was reached by clicking the button, typing manually, live-fetching, or hitting Reset.
@@ -48,12 +48,19 @@ FDSO is the only field that's **not** live-fetched — it resets to its hardcode
 
 ## Computed outputs
 
+- **MSTR estimated price** = BTC price × Net sats per share / 100,000,000 × mNAV
+- **MSTR actual price** — live, fetched from `api.strategy.com/btc/mstrKpiData` → `ufPrice` on load and on Reset (same request used for total debt outstanding)
+- **Implied mNAV** = MSTR actual price / MSTR estimated price — how the live market price compares to the model's estimate; distinct from the **mNAV** *input*, which feeds into the estimated-price formula above rather than being derived from it
+
+Below these, the card has a second, blank spacer row (same markup/height as a real stat row, `aria-hidden`) so the card's overall height stays constant — it doesn't currently show any fields, reserved for future metrics.
+
+Internally, a few more figures are computed from the inputs and drive the chart below rather than being shown as their own stat tiles:
+
 - **BTC claims from debt** = debt / BTC price
 - **BTC available to common shareholders** = BTC held − BTC claims from debt
 - **BTC equivalent of cash** = cash / BTC price
 - **Net BTC available** = BTC available to common shareholders + BTC equivalent of cash
-- **Net sats per share** = Net BTC available × 100,000,000 / FDSO
-- **MSTR estimated price** = BTC price × Net sats per share / 100,000,000 × mNAV *(headline output)*
+- **Net sats per share** = Net BTC available × 100,000,000 / FDSO *(also shown at the center of the donut chart)*
 
 ## BTC pool composition chart
 
