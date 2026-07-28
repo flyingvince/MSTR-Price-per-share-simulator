@@ -340,7 +340,7 @@
 <div class="viz-root">
 <div class="page">
   <header>
-    <h1>MSTR Net Sats Per Share Simulator</h1>
+    <h1>MSTR - Price per share simulator</h1>
     <p>Theoretical composition of Strategy's (MSTR) BTC-backed balance sheet. Adjust any input to see how BTC claims from debt, cash reserves, and net BTC available to common shareholders shift.</p>
   </header>
 
@@ -375,7 +375,7 @@
         <div class="readout" id="btcPrice-readout"></div>
         <div class="live-status" id="liveStatus">Fetching live BTC price&hellip;</div>
         <div class="preset-row">
-          <button type="button" class="preset-btn" id="presetCurrent" disabled>Current price</button>
+          <button type="button" class="preset-btn" id="presetCurrent" disabled>Current</button>
           <button type="button" class="preset-btn" data-preset="50000">$50k</button>
           <button type="button" class="preset-btn" data-preset="45000">$45k</button>
           <button type="button" class="preset-btn" data-preset="40000">$40k</button>
@@ -812,7 +812,7 @@
       liveStatusEl.className = 'live-status err';
     } finally {
       presetCurrentBtn.disabled = false;
-      presetCurrentBtn.textContent = 'Current price';
+      presetCurrentBtn.textContent = 'Current';
     }
   }
 

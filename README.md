@@ -17,7 +17,7 @@ Share price is **not** a direct input — it's replaced by the computed "MSTR es
 
 ### Preset buttons
 
-- **BTC price**: "Current price" (re-fetches the live price), "$50k", "$45k", "$40k", "$38k"
+- **BTC price**: "Current" (re-fetches the live price), "$50k", "$45k", "$40k", "$38k"
 - **FDSO**: "-10%", "-5%", "Current" (= 388,648,000 baseline), "+5%", "+10%"
 - **mNAV**: "2x", "3x", "4x" (jumps the number field directly, even outside the slider's visible 0.9–1.1 track)
 
