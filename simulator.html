@@ -874,21 +874,12 @@
   });
 
   async function fetchLiveBtcPrice() {
-    try {
-      const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
-      if (!res.ok) throw new Error('coingecko response not ok');
-      const data = await res.json();
-      const p = data && data.bitcoin && data.bitcoin.usd;
-      if (!(typeof p === 'number' && p > 0)) throw new Error('coingecko payload invalid');
-      return p;
-    } catch (e) {
-      const res2 = await fetch('https://api.coinbase.com/v2/prices/spot?currency=USD');
-      if (!res2.ok) throw new Error('coinbase response not ok');
-      const data2 = await res2.json();
-      const p2 = data2 && data2.data && parseFloat(data2.data.amount);
-      if (!(typeof p2 === 'number' && p2 > 0)) throw new Error('coinbase payload invalid');
-      return p2;
-    }
+    const res = await fetch('https://api.strategy.com/btc/bitcoinKpis');
+    if (!res.ok) throw new Error('bitcoinKpis response not ok');
+    const data = await res.json();
+    const p = data && data.results && data.results.latestPrice;
+    if (!(typeof p === 'number' && p > 0)) throw new Error('bitcoinKpis latestPrice invalid');
+    return p;
   }
 
   // Fetches a fresh price every time it runs — used on initial load AND on every
