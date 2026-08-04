@@ -385,8 +385,9 @@
 
       <div class="field">
         <label for="fdso">Fully diluted shares outstanding (FDSO)</label>
-        <input type="text" inputmode="decimal" id="fdso" value="388648000" data-decimals="0">
+        <input type="text" inputmode="decimal" id="fdso" value="391656000" data-decimals="0">
         <div class="readout" id="fdso-readout"></div>
+        <div class="live-status" id="fdsoStatus">Fetching live FDSO&hellip;</div>
         <div class="preset-row">
           <button type="button" class="preset-btn" data-fdso-preset="-0.10">-10%</button>
           <button type="button" class="preset-btn" data-fdso-preset="-0.05">-5%</button>
@@ -494,7 +495,7 @@
     debt: 22218000000,
     cash: 3225000000,
     btcPrice: 63948,
-    fdso: 388648000,
+    fdso: 391656000,
     mnav: 1.0
   };
 
@@ -704,10 +705,11 @@
     });
     presetCurrentBtn.classList.toggle('active', liveBtcPrice != null && Math.round(liveBtcPrice) === btcPriceRounded);
 
+    const fdsoBase = liveFdso != null ? liveFdso : DEFAULTS.fdso;
     const fdsoRounded = Math.round(v.fdso);
     document.querySelectorAll('.preset-btn[data-fdso-preset]').forEach((btn) => {
       const delta = parseFloat(btn.dataset.fdsoPreset);
-      const target = Math.round(DEFAULTS.fdso * (1 + delta));
+      const target = Math.round(fdsoBase * (1 + delta));
       btn.classList.toggle('active', target === fdsoRounded);
     });
 
@@ -737,7 +739,6 @@
   inputs.mnavNum.addEventListener('change', () => { bindMnavSync(false); render(); });
 
   el('resetBtn').addEventListener('click', () => {
-    setFieldValue(inputs.fdso, DEFAULTS.fdso);
     inputs.mnavRange.value = DEFAULTS.mnav;
     inputs.mnavNum.value = DEFAULTS.mnav.toFixed(2);
     render();
@@ -753,11 +754,99 @@
   // BTC price presets
   let liveBtcPrice = null;
   let mstrActualPrice = null;
+  let liveFdso = null;
   const presetCurrentBtn = el('presetCurrent');
   const liveStatusEl = el('liveStatus');
   const btcHeldStatusEl = el('btcHeldStatus');
   const debtStatusEl = el('debtStatus');
   const cashStatusEl = el('cashStatus');
+  const fdsoStatusEl = el('fdsoStatus');
+
+  // strategy.com/shares sends no CORS headers and its own JS chunks are blocked by
+  // an Akamai WAF rule unless requested with a same-site Referer, so its FDSO figure
+  // can't be read directly from the browser (public CORS proxies were tried too —
+  // allorigins times out, corsproxy.io is paywalled, r.jina.ai gets redirected by the
+  // WAF — none work reliably). Instead this reproduces strategy.com's own FDSO
+  // formula, reverse-engineered from its page bundle (chunks/pages/shares-*.js):
+  //   FDSO = basic_shares_outstanding + options_outstanding + rsu_psu_unvested
+  //          + shares from convertible tranches that are in-the-money
+  //          (i.e. current MSTR price >= that tranche's conversion price)
+  // Per-tranche conversion prices are themselves hardcoded in strategy.com's own
+  // bundle (they're fixed at bond issuance), so hardcoding them here mirrors the
+  // site's own implementation, not an approximation of it. The disclosure figures
+  // (basic/options/RSU/tranche sizes) only change on quarterly filings and have no
+  // CORS-open source, so they're hardcoded too — refresh from strategy.com/shares
+  // when a new quarter posts. The one genuinely live input, current MSTR price, is
+  // already fetched every refresh via fetchMstrKpiLive() below (mstrActualPrice),
+  // so FDSO recomputes off real live data and matches the site's figure exactly:
+  // verified 2026-08-04 against strategy.com/shares showing FDSO = 391,656 (thousand).
+  // The recomputed result is cached in localStorage and only refreshed once per
+  // 24h, per product requirement — a cache hit skips recomputation entirely and
+  // reuses whatever was last derived, even if the live price has since moved.
+  const FDSO_LATEST_ROW = {
+    asOf: '2026-08-02', // strategy.com/shares "Latest Shares Column"
+    basicSharesOutstanding: 387614,
+    optionsOutstanding: 3157,
+    rsuPsuUnvested: 885,
+    converts: [
+      { shares: 5513, convPrice: 183.19 }, // 2028 convert
+      { shares: 2231, convPrice: 672.40 }, // 2029 convert
+      { shares: 5342, convPrice: 149.77 }, // 2030 convert
+      { shares: 4614, convPrice: 433.43 }, // 2030-B convert
+      { shares: 2594, convPrice: 232.72 }, // 2031 convert
+      { shares: 3915, convPrice: 204.33 }, // 2032 convert
+      { shares: 1402, convPrice: 1000.00 } // STRK convert
+    ]
+  };
+
+  function computeFdso(mstrPrice) {
+    const row = FDSO_LATEST_ROW;
+    const itmShares = row.converts.reduce((sum, c) => sum + (mstrPrice >= c.convPrice ? c.shares : 0), 0);
+    const totalThousands = row.basicSharesOutstanding + row.optionsOutstanding + row.rsuPsuUnvested + itmShares;
+    return totalThousands * 1000;
+  }
+
+  const FDSO_CACHE_KEY = 'mstrSim.liveFdso';
+  const FDSO_CACHE_MS = 24 * 60 * 60 * 1000;
+
+  function readFdsoCache() {
+    try {
+      const obj = JSON.parse(localStorage.getItem(FDSO_CACHE_KEY));
+      return (obj && obj.value > 0 && obj.ts) ? obj : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeFdsoCache(value) {
+    try {
+      localStorage.setItem(FDSO_CACHE_KEY, JSON.stringify({ value, ts: Date.now() }));
+    } catch (e) { /* localStorage unavailable (e.g. private browsing) — skip caching */ }
+  }
+
+  function applyFdso(mstrPrice) {
+    const cached = readFdsoCache();
+    const cacheFresh = cached && (Date.now() - cached.ts) < FDSO_CACHE_MS;
+
+    if (cacheFresh) {
+      liveFdso = cached.value;
+      setFieldValue(inputs.fdso, Math.round(liveFdso));
+      setStatus(fdsoStatusEl, true);
+    } else if (mstrPrice > 0) {
+      liveFdso = computeFdso(mstrPrice);
+      writeFdsoCache(liveFdso);
+      setFieldValue(inputs.fdso, Math.round(liveFdso));
+      setStatus(fdsoStatusEl, true);
+    } else if (cached) {
+      liveFdso = cached.value;
+      setFieldValue(inputs.fdso, Math.round(liveFdso));
+      setStatus(fdsoStatusEl, false, 'Live MSTR price unavailable — using last cached value.');
+    } else {
+      liveFdso = null;
+      setFieldValue(inputs.fdso, DEFAULTS.fdso);
+      setStatus(fdsoStatusEl, false, 'Live MSTR price unavailable — using default value.');
+    }
+  }
 
   document.querySelectorAll('.preset-btn[data-preset]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -769,7 +858,8 @@
   document.querySelectorAll('.preset-btn[data-fdso-preset]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const delta = parseFloat(btn.dataset.fdsoPreset);
-      setFieldValue(inputs.fdso, Math.round(DEFAULTS.fdso * (1 + delta)));
+      const fdsoBase = liveFdso != null ? liveFdso : DEFAULTS.fdso;
+      setFieldValue(inputs.fdso, Math.round(fdsoBase * (1 + delta)));
       render();
     });
   });
@@ -865,14 +955,12 @@
   // Fetches every live-sourced input fresh — used on initial load AND every
   // "Reset to defaults" click. Each field falls back to its last-known DEFAULTS
   // value independently if its own fetch fails, so one bad source doesn't block the rest.
-  // FDSO is not live-sourced: strategy.com exposes no CORS-enabled API for the
-  // per-tranche convert data it requires, and public CORS proxies proved too
-  // unreliable (aggressive rate limits, and strategy.com's Cloudflare WAF blocking
-  // the proxies' own IPs outright).
+  // FDSO is recomputed at most once per 24h from the live MSTR price — see applyFdso() above.
   async function refreshAllLiveData() {
     setStatus(btcHeldStatusEl, false, 'Fetching live BTC holdings…');
     setStatus(debtStatusEl, false, 'Fetching live debt data…');
     setStatus(cashStatusEl, false, 'Fetching live cash data…');
+    setStatus(fdsoStatusEl, false, 'Fetching live FDSO…');
 
     const [priceResult, bitcoinKpisResult, mstrKpiResult] = await Promise.allSettled([
       refreshLivePrice(),
@@ -898,10 +986,12 @@
       setFieldValue(inputs.debt, Math.round(debt + pref));
       setStatus(debtStatusEl, true);
       mstrActualPrice = ufPrice;
+      applyFdso(ufPrice);
     } else {
       setFieldValue(inputs.debt, DEFAULTS.debt);
       setStatus(debtStatusEl, false, 'Live data unavailable — using last known value.');
       mstrActualPrice = null;
+      applyFdso(null);
     }
 
     render();
