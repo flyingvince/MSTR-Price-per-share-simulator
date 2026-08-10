@@ -351,30 +351,30 @@
 
       <div class="field">
         <label for="btcHeld">BTC held on balance sheet</label>
-        <input type="text" inputmode="decimal" id="btcHeld" value="843775" data-decimals="0">
+        <input type="text" inputmode="decimal" id="btcHeld" placeholder="Fetching latest BTC holdings data&hellip;" data-decimals="0">
         <div class="readout" id="btcHeld-readout"></div>
-        <div class="live-status" id="btcHeldStatus">Fetching live BTC holdings&hellip;</div>
+        <div class="live-status" id="btcHeldStatus"></div>
       </div>
 
       <div class="field">
         <label for="debt">Total debt outstanding (preferred + convertible)</label>
-        <input type="text" inputmode="decimal" id="debt" value="22185000000" data-decimals="0">
+        <input type="text" inputmode="decimal" id="debt" placeholder="Fetching latest debt data&hellip;" data-decimals="0">
         <div class="readout" id="debt-readout"></div>
-        <div class="live-status" id="debtStatus">Fetching live debt data&hellip;</div>
+        <div class="live-status" id="debtStatus"></div>
       </div>
 
       <div class="field">
         <label for="cash">USD cash reserve</label>
-        <input type="text" inputmode="decimal" id="cash" value="3750000000" data-decimals="0">
+        <input type="text" inputmode="decimal" id="cash" placeholder="Fetching latest cash data&hellip;" data-decimals="0">
         <div class="readout" id="cash-readout"></div>
-        <div class="live-status" id="cashStatus">Fetching live cash data&hellip;</div>
+        <div class="live-status" id="cashStatus"></div>
       </div>
 
       <div class="field">
         <label for="btcPrice">BTC price</label>
-        <input type="text" inputmode="decimal" id="btcPrice" value="63948" data-decimals="0">
+        <input type="text" inputmode="decimal" id="btcPrice" placeholder="Fetching latest BTC price data&hellip;" data-decimals="0">
         <div class="readout" id="btcPrice-readout"></div>
-        <div class="live-status" id="liveStatus">Fetching live BTC price&hellip;</div>
+        <div class="live-status" id="liveStatus"></div>
         <div class="preset-row">
           <button type="button" class="preset-btn" id="presetCurrent" disabled>Current</button>
           <button type="button" class="preset-btn" data-preset="50000">$50k</button>
@@ -386,9 +386,9 @@
 
       <div class="field">
         <label for="fdso">Fully diluted shares outstanding (FDSO)</label>
-        <input type="text" inputmode="decimal" id="fdso" value="391656000" data-decimals="0">
+        <input type="text" inputmode="decimal" id="fdso" placeholder="Fetching latest FDSO data&hellip;" data-decimals="0">
         <div class="readout" id="fdso-readout"></div>
-        <div class="live-status" id="fdsoStatus">Fetching live FDSO&hellip;</div>
+        <div class="live-status" id="fdsoStatus"></div>
         <div class="preset-row">
           <button type="button" class="preset-btn" data-fdso-preset="-0.02">-2%</button>
           <button type="button" class="preset-btn" data-fdso-preset="-0.01">-1%</button>
@@ -540,6 +540,7 @@
   }
 
   function formatField(inputEl) {
+    if (inputEl.value === '') return; // leave blank so the "fetching…" placeholder shows through
     const decimals = parseInt(inputEl.dataset.decimals || '0', 10);
     const num = parseCommaNum(inputEl.value);
     inputEl.value = num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
@@ -601,36 +602,37 @@
   }
 
   let hoverAttached = false;
+  let dataLoaded = false;
 
   function render() {
     const v = readValues();
     const r = compute(v);
 
-    el('out-mstrPrice').textContent = r.valid ? '$' + r.mstrPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-    el('out-mstrActual').textContent = mstrActualPrice != null ? '$' + mstrActualPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    el('out-mstrPrice').textContent = (dataLoaded && r.valid) ? '$' + r.mstrPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
+    el('out-mstrActual').textContent = (dataLoaded && mstrActualPrice != null) ? '$' + mstrActualPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
     const impliedMnav = (mstrActualPrice != null && r.valid && r.mstrPrice > 0) ? mstrActualPrice / r.mstrPrice : null;
-    el('out-impliedMnav').textContent = impliedMnav != null ? impliedMnav.toFixed(2) + 'x' : '—';
-    el('center-num').textContent = r.valid ? fmtInt(r.netSats) : '—';
+    el('out-impliedMnav').textContent = (dataLoaded && impliedMnav != null) ? impliedMnav.toFixed(2) + 'x' : '-';
+    el('center-num').textContent = (dataLoaded && r.valid) ? fmtInt(r.netSats) : '-';
 
     const warningBox = el('warningBox');
     warningBox.innerHTML = '';
-    if (!r.valid) {
+    if (dataLoaded && !r.valid) {
       warningBox.innerHTML = '<div class="warning">BTC price must be positive for this model to compute.</div>';
-    } else if (r.negativeCommon) {
+    } else if (dataLoaded && r.negativeCommon) {
       warningBox.innerHTML = '<div class="warning">Debt claims exceed total BTC held under these inputs — common shareholders\' BTC share is negative.</div>';
     }
 
     // readouts
-    el('btcHeld-readout').textContent = '₿' + fmtInt(v.btcHeld);
-    el('debt-readout').textContent = fmtUsdFull(v.debt);
-    el('cash-readout').textContent = fmtUsdFull(v.cash);
-    el('btcPrice-readout').textContent = '$' + Math.round(v.btcPrice).toLocaleString('en-US');
-    el('fdso-readout').textContent = fmtInt(v.fdso) + ' shares';
+    el('btcHeld-readout').textContent = inputs.btcHeld.value === '' ? '…' : '₿' + fmtInt(v.btcHeld);
+    el('debt-readout').textContent = inputs.debt.value === '' ? '…' : fmtUsdFull(v.debt);
+    el('cash-readout').textContent = inputs.cash.value === '' ? '…' : fmtUsdFull(v.cash);
+    el('btcPrice-readout').textContent = inputs.btcPrice.value === '' ? '…' : '$' + Math.round(v.btcPrice).toLocaleString('en-US');
+    el('fdso-readout').textContent = inputs.fdso.value === '' ? '…' : fmtInt(v.fdso) + ' shares';
 
     // donut
     let cursor = 0;
     segMeta.forEach((m) => {
-      const frac = Math.max(r[m.key], 0);
+      const frac = dataLoaded ? Math.max(r[m.key], 0) : 0;
       setSeg(el(m.id), cursor, frac);
       cursor += frac;
     });
@@ -641,26 +643,27 @@
     }
 
     // legend
+    const loadedValid = dataLoaded && r.valid;
     legendEl.innerHTML = segMeta.map((m) => `
       <div class="legend-row">
         <span class="swatch" style="background:${m.color}"></span>
         <span class="legend-name">${m.name}</span>
-        <span class="legend-pct">${r.valid ? fmtPct(r[m.key]) : '—'}</span>
-        <span class="legend-btc">₿${r.valid ? fmtBtc(r[m.btcKey]) : '—'}</span>
+        <span class="legend-pct">${loadedValid ? fmtPct(r[m.key]) : '-'}</span>
+        <span class="legend-btc">₿${loadedValid ? fmtBtc(r[m.btcKey]) : '-'}</span>
       </div>
     `).join('');
 
     // summary line — common + claims must equal total BTC on balance sheet
     legendSummaryEl.innerHTML = `
       <span class="legend-name">Total BTC on balance sheet</span>
-      <span class="legend-btc">₿${r.valid ? fmtBtc(r.btcHeldTotal) : '—'}</span>
+      <span class="legend-btc">₿${loadedValid ? fmtBtc(r.btcHeldTotal) : '-'}</span>
     `;
 
     // extra line — cash-equivalent BTC, additive on top of the pie above
     legendExtraEl.innerHTML = `
       <span class="swatch" style="background:var(--series-3)"></span>
       <span class="legend-name">Extra BTC due to cash reserves</span>
-      <span class="legend-btc">+₿${r.valid ? fmtBtc(r.btcCash) : '—'}</span>
+      <span class="legend-btc">+₿${loadedValid ? fmtBtc(r.btcCash) : '-'}</span>
     `;
 
     // table
@@ -671,28 +674,28 @@
     dataTableBody.innerHTML = segMeta.map((m) => `
       <tr>
         <td>${m.name}</td>
-        <td>₿${r.valid ? fmtBtc(r[m.btcKey]) : '—'}</td>
-        <td>${r.valid ? fmtPct(r[m.key]) : '—'}</td>
-        <td>${r.valid ? fmtUsdFull(r[m.btcKey] * v.btcPrice) : '—'}</td>
+        <td>₿${loadedValid ? fmtBtc(r[m.btcKey]) : '-'}</td>
+        <td>${loadedValid ? fmtPct(r[m.key]) : '-'}</td>
+        <td>${loadedValid ? fmtUsdFull(r[m.btcKey] * v.btcPrice) : '-'}</td>
       </tr>
     `).join('') + `
       <tr>
         <td><strong>Total BTC on balance sheet</strong></td>
-        <td><strong>₿${r.valid ? fmtBtc(r.btcHeldTotal) : '—'}</strong></td>
-        <td><strong>${r.valid ? '100.0%' : '—'}</strong></td>
-        <td><strong>${r.valid ? fmtUsdFull(r.btcHeldTotal * v.btcPrice) : '—'}</strong></td>
+        <td><strong>₿${loadedValid ? fmtBtc(r.btcHeldTotal) : '-'}</strong></td>
+        <td><strong>${loadedValid ? '100.0%' : '-'}</strong></td>
+        <td><strong>${loadedValid ? fmtUsdFull(r.btcHeldTotal * v.btcPrice) : '-'}</strong></td>
       </tr>
       <tr>
         <td>${cashRow.name}</td>
-        <td>+₿${r.valid ? fmtBtc(r[cashRow.btcKey]) : '—'}</td>
-        <td>—</td>
-        <td>${r.valid ? fmtUsdFull(r[cashRow.btcKey] * v.btcPrice) : '—'}</td>
+        <td>+₿${loadedValid ? fmtBtc(r[cashRow.btcKey]) : '-'}</td>
+        <td>-</td>
+        <td>${loadedValid ? fmtUsdFull(r[cashRow.btcKey] * v.btcPrice) : '-'}</td>
       </tr>
       <tr>
         <td><strong>Net reserve</strong></td>
-        <td><strong>₿${r.valid ? fmtBtc(r.netBtc) : '—'}</strong></td>
-        <td>—</td>
-        <td><strong>${r.valid ? fmtUsdFull(r.netBtc * v.btcPrice) : '—'}</strong></td>
+        <td><strong>₿${loadedValid ? fmtBtc(r.netBtc) : '-'}</strong></td>
+        <td>-</td>
+        <td><strong>${loadedValid ? fmtUsdFull(r.netBtc * v.btcPrice) : '-'}</strong></td>
       </tr>
     `;
 
@@ -888,6 +891,7 @@
   async function refreshLivePrice() {
     presetCurrentBtn.disabled = true;
     presetCurrentBtn.textContent = 'Fetching…';
+    setFetching(inputs.btcPrice, liveStatusEl);
     try {
       const price = await fetchLiveBtcPrice();
       liveBtcPrice = price;
@@ -944,15 +948,23 @@
     }
   }
 
+  // Clears a live-sourced field so its "Fetching latest … data…" placeholder shows
+  // through, and clears any stale status message below it.
+  function setFetching(inputEl, statusEl) {
+    inputEl.value = '';
+    statusEl.textContent = '';
+    statusEl.className = 'live-status';
+  }
+
   // Fetches every live-sourced input fresh — used on initial load AND every
   // "Reset to defaults" click. Each field falls back to its last-known DEFAULTS
   // value independently if its own fetch fails, so one bad source doesn't block the rest.
   // FDSO is recomputed at most once per 24h from the live MSTR price — see applyFdso() above.
   async function refreshAllLiveData() {
-    setStatus(btcHeldStatusEl, false, 'Fetching live BTC holdings…');
-    setStatus(debtStatusEl, false, 'Fetching live debt data…');
-    setStatus(cashStatusEl, false, 'Fetching live cash data…');
-    setStatus(fdsoStatusEl, false, 'Fetching live FDSO…');
+    setFetching(inputs.btcHeld, btcHeldStatusEl);
+    setFetching(inputs.debt, debtStatusEl);
+    setFetching(inputs.cash, cashStatusEl);
+    setFetching(inputs.fdso, fdsoStatusEl);
 
     const [priceResult, bitcoinKpisResult, mstrKpiResult] = await Promise.allSettled([
       refreshLivePrice(),
@@ -986,6 +998,7 @@
       applyFdso(null);
     }
 
+    dataLoaded = true;
     render();
   }
 
