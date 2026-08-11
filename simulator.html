@@ -783,15 +783,15 @@
   // when a new quarter posts. The one genuinely live input, current MSTR price, is
   // already fetched every refresh via fetchMstrKpiLive() below (mstrActualPrice),
   // so FDSO recomputes off real live data and matches the site's figure exactly:
-  // verified 2026-08-04 against strategy.com/shares showing FDSO = 391,656 (thousand).
+  // verified 2026-08-11 against strategy.com/shares showing FDSO = 398,239 (thousand).
   // The recomputed result is cached in localStorage and only refreshed once per
   // 24h, per product requirement — a cache hit skips recomputation entirely and
   // reuses whatever was last derived, even if the live price has since moved.
   const FDSO_LATEST_ROW = {
-    asOf: '2026-08-02', // strategy.com/shares "Latest Shares Column"
-    basicSharesOutstanding: 387614,
-    optionsOutstanding: 3157,
-    rsuPsuUnvested: 885,
+    asOf: '2026-08-09', // strategy.com/shares "Latest Shares Column"
+    basicSharesOutstanding: 394203,
+    optionsOutstanding: 3154,
+    rsuPsuUnvested: 882,
     converts: [
       { shares: 5513, convPrice: 183.19 }, // 2028 convert
       { shares: 2231, convPrice: 672.40 }, // 2029 convert
