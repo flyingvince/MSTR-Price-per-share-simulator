@@ -10,7 +10,7 @@ A single-page HTML simulator that models Strategy's (MSTR, Nasdaq) theoretical s
 | BTC held on balance sheet | ₿843,775 | |
 | Total debt outstanding (preferred + convertible) | $22,218,000,000 | |
 | USD cash reserve | $3,225,000,000 | |
-| Fully diluted shares outstanding (FDSO) | 388,648,000 shares | |
+| Fully diluted shares outstanding (FDSO) | 419,948,000 shares | Recomputed live on load (see below); this is only the last-resort fallback |
 | mNAV | 1.0 | Slider range 0.9–1.1, step 0.01, synced with an editable number field |
 
 Share price is **not** a direct input — it's replaced by the computed "MSTR estimated price" output.
@@ -18,21 +18,22 @@ Share price is **not** a direct input — it's replaced by the computed "MSTR es
 ### Preset buttons
 
 - **BTC price**: "Current" (re-fetches the live price), "$50k", "$45k", "$40k", "$38k"
-- **FDSO**: "-10%", "-5%", "Current" (= 388,648,000 baseline), "+5%", "+10%"
+- **FDSO**: "-2%", "-1%", "Current" (= the live/cached FDSO value, or its hardcoded default if that's unavailable), "+1%", "+2%"
 - **mNAV**: "2x", "3x", "4x" (jumps the number field directly, even outside the slider's visible 0.9–1.1 track)
 
 Whichever preset button currently matches a field's value is highlighted — whether that state was reached by clicking the button, typing manually, live-fetching, or hitting Reset.
 
 ## Live data
 
-On page load, and whenever **"Reset to defaults"** is pressed, BTC price, BTC held, USD cash reserve, and total debt outstanding refresh from live sources. Each fetch is independent — if one source fails, the others still resolve normally, and only the failing field falls back to its hardcoded default with its own status message ("Fetching live … data…" while in flight, cleared on success, or "Live data unavailable — using last known value." on failure).
+On page load, and whenever **"Reset to defaults"** is pressed, BTC price, BTC held, USD cash reserve, total debt outstanding, and FDSO refresh from live sources. Each fetch is independent — if one source fails, the others still resolve normally, and only the failing field falls back to its hardcoded default with its own status message ("Fetching live … data…" while in flight, cleared on success, or "Live data unavailable — using last known value." on failure).
 
 | Field | Source | Method |
 |---|---|---|
-| BTC price | CoinGecko, falling back to Coinbase | Direct fetch |
+| BTC price | `api.strategy.com/btc/bitcoinKpis` → `latestPrice` | Direct fetch (CORS-enabled) |
 | BTC held | `api.strategy.com/btc/bitcoinKpis` → `btcHoldings` | Direct fetch (CORS-enabled) |
 | USD cash reserve | `api.strategy.com/btc/bitcoinKpis` → `totalAnnualDividends` × `usdMonthsOfDividends` / 12 | Direct fetch (CORS-enabled), derived (see below) |
 | Total debt outstanding | `api.strategy.com/btc/mstrKpiData` → `debt` + `pref` (in $M) | Direct fetch (CORS-enabled) |
+| FDSO | Recomputed locally from `api.strategy.com/btc/mstrKpiData` → `ufPrice` (MSTR's live price) | Formula, see below |
 
 ### Cash reserve derivation
 
@@ -44,7 +45,19 @@ cash = usdMonthsOfDividends × (totalAnnualDividends / 12)
 
 This reproduces the reserve figure exactly (validated against a known $3,225,000,000 reserve) without needing a CORS proxy.
 
-FDSO is the only field that's **not** live-fetched — it resets to its hardcoded default on load/Reset. Strategy.com exposes no CORS-enabled API for the per-tranche convertible-note data FDSO requires (only the two KPI endpoints above allow direct browser access); routing it through a public CORS proxy was tried and dropped, since the proxies proved too unreliable in practice — aggressive rate limits (~1 request/30s), and strategy.com's Cloudflare protection blocking several proxy providers' IPs outright.
+### FDSO derivation
+
+strategy.com/shares itself (where FDSO is officially published) sends no CORS headers and sits behind an Akamai WAF that returns `403` to any non-browser request — confirmed directly, including with full browser headers — so it can't be fetched, proxied, or scraped from the client. Instead, the simulator reproduces strategy.com's own FDSO formula locally:
+
+```
+FDSO = basic shares outstanding + options outstanding + RSU/PSU unvested
+       + shares from convertible tranches that are currently in-the-money
+         (i.e. MSTR's live price ≥ that tranche's conversion price)
+```
+
+The disclosure figures (basic shares, options, RSU/PSU, and each convertible tranche's size/conversion price) only change on quarterly filings and have no CORS-open source, so they're hardcoded and refreshed manually from strategy.com/shares each quarter. As of the **2026-08-23** filing: 415,929k basic + 3,154k options + 865k RSU/PSU = 419,948k shares (no tranches currently in-the-money). The one genuinely live input — MSTR's current price — is already fetched every refresh (see table above), so FDSO recomputes off real live data and matches the site's published figure.
+
+The recomputed result is cached in `localStorage` for 24 hours; a fresh cache reuses the last-derived value even if the live price has since moved. If both the cache and the live price are unavailable, FDSO falls back to the hardcoded default in the table above.
 
 ## Computed outputs
 
@@ -77,7 +90,7 @@ Hovering a donut segment shows its exact BTC amount and percentage. A "Show as t
 
 ## Other behavior
 
-- **Reset to defaults**: re-triggers live fetches for BTC price, BTC held, cash, and debt (falling back to hardcoded defaults per-field on failure); resets FDSO and mNAV to their hardcoded defaults.
+- **Reset to defaults**: re-triggers live fetches for BTC price, BTC held, cash, and debt, and recomputes FDSO (subject to its 24h cache) — each falling back to its hardcoded default on failure; resets mNAV to its hardcoded default.
 - **Warnings**: shown if BTC price is zero or negative (model can't compute), or if debt claims exceed total BTC held (negative common-shareholder BTC).
 - Supports both light and dark mode.
 
