@@ -18,7 +18,7 @@ Share price is **not** a direct input — it's replaced by the computed "MSTR es
 ### Preset buttons
 
 - **BTC price**: "Current" (re-fetches the live price), "$50k", "$45k", "$40k", "$38k"
-- **FDSO**: "-2%", "-1%", "Current" (= the live/cached FDSO value, or its hardcoded default if that's unavailable), "+1%", "+2%"
+- **FDSO**: "-2%", "-1%", "Current" (= the live FDSO value, or its hardcoded default if that's unavailable), "+1%", "+2%"
 - **mNAV**: "2x", "3x", "4x" (jumps the number field directly, even outside the slider's visible 0.9–1.1 track)
 
 Whichever preset button currently matches a field's value is highlighted — whether that state was reached by clicking the button, typing manually, live-fetching, or hitting Reset.
@@ -55,9 +55,9 @@ FDSO = basic shares outstanding + options outstanding + RSU/PSU unvested
          (i.e. MSTR's live price ≥ that tranche's conversion price)
 ```
 
-The disclosure figures (basic shares, options, RSU/PSU, and each convertible tranche's size/conversion price) only change on quarterly filings and have no CORS-open source, so they're hardcoded and refreshed manually from strategy.com/shares each quarter. As of the **2026-08-23** filing: 415,929k basic + 3,154k options + 865k RSU/PSU = 419,948k shares (no tranches currently in-the-money). The one genuinely live input — MSTR's current price — is already fetched every refresh (see table above), so FDSO recomputes off real live data and matches the site's published figure.
+The disclosure figures (basic shares, options, RSU/PSU, and each convertible tranche's size/conversion price) only change on quarterly filings and have no CORS-open source, so they're hardcoded and refreshed manually from strategy.com/shares each quarter. As of the **2026-09-01** filing: 420,483k basic + 3,136k options + 860k RSU/PSU, plus any convertible tranches currently in-the-money. The one genuinely live input — MSTR's current price — is already fetched every refresh (see table above), so FDSO recomputes off real live data and matches the site's published figure.
 
-The recomputed result is cached in `localStorage` for 24 hours; a fresh cache reuses the last-derived value even if the live price has since moved. If both the cache and the live price are unavailable, FDSO falls back to the hardcoded default in the table above.
+The result is recomputed from the live MSTR price on **every** refresh — no caching, so the FDSO figure always tracks the latest price. Only if the live price is unavailable does FDSO fall back to the hardcoded default in the table above.
 
 ## Computed outputs
 
@@ -90,7 +90,7 @@ Hovering a donut segment shows its exact BTC amount and percentage. A "Show as t
 
 ## Other behavior
 
-- **Reset to defaults**: re-triggers live fetches for BTC price, BTC held, cash, and debt, and recomputes FDSO (subject to its 24h cache) — each falling back to its hardcoded default on failure; resets mNAV to its hardcoded default.
+- **Reset to defaults**: re-triggers live fetches for BTC price, BTC held, cash, and debt, and recomputes FDSO from the fresh live MSTR price — each falling back to its hardcoded default on failure; resets mNAV to its hardcoded default.
 - **Warnings**: shown if BTC price is zero or negative (model can't compute), or if debt claims exceed total BTC held (negative common-shareholder BTC).
 - Supports both light and dark mode.
 
