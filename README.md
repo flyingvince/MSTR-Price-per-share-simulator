@@ -10,7 +10,7 @@ A single-page HTML simulator that models Strategy's (MSTR, Nasdaq) theoretical s
 | BTC held on balance sheet | ₿843,775 | |
 | Total debt outstanding (preferred + convertible) | $22,218,000,000 | |
 | USD cash reserve | $3,225,000,000 | |
-| Fully diluted shares outstanding (FDSO) | 419,948,000 shares | Recomputed live on load (see below); this is only the last-resort fallback |
+| Fully diluted shares outstanding (FDSO) | 424,479,000 shares | Recomputed live on load (see below); this is only the last-resort fallback |
 | mNAV | 1.0 | Slider range 0.9–1.1, step 0.01, synced with an editable number field |
 
 Share price is **not** a direct input — it's replaced by the computed "MSTR estimated price" output.
