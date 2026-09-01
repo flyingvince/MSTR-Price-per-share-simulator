@@ -784,14 +784,12 @@
   // already fetched every refresh via fetchMstrKpiLive() below (mstrActualPrice),
   // so FDSO recomputes off real live data and matches the site's figure exactly:
   // verified 2026-08-23 against strategy.com/shares showing FDSO = 419,948 (thousand).
-  // The recomputed result is cached in localStorage and only refreshed once per
-  // 24h, per product requirement — a cache hit skips recomputation entirely and
-  // reuses whatever was last derived, even if the live price has since moved.
+  // FDSO is recomputed from the live MSTR price on every refresh — no caching.
   const FDSO_LATEST_ROW = {
-    asOf: '2026-08-23', // strategy.com/shares "Latest Shares Column"
-    basicSharesOutstanding: 415929,
-    optionsOutstanding: 3154,
-    rsuPsuUnvested: 865,
+    asOf: '2026-09-01', // strategy.com/shares "Latest Shares Column"
+    basicSharesOutstanding: 420483,
+    optionsOutstanding: 3136,
+    rsuPsuUnvested: 860,
     converts: [
       { shares: 5513, convPrice: 183.19 }, // 2028 convert
       { shares: 2231, convPrice: 672.40 }, // 2029 convert
@@ -810,41 +808,12 @@
     return totalThousands * 1000;
   }
 
-  const FDSO_CACHE_KEY = 'mstrSim.liveFdso';
-  const FDSO_CACHE_MS = 24 * 60 * 60 * 1000;
-
-  function readFdsoCache() {
-    try {
-      const obj = JSON.parse(localStorage.getItem(FDSO_CACHE_KEY));
-      return (obj && obj.value > 0 && obj.ts) ? obj : null;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function writeFdsoCache(value) {
-    try {
-      localStorage.setItem(FDSO_CACHE_KEY, JSON.stringify({ value, ts: Date.now() }));
-    } catch (e) { /* localStorage unavailable (e.g. private browsing) — skip caching */ }
-  }
-
   function applyFdso(mstrPrice) {
-    const cached = readFdsoCache();
-    const cacheFresh = cached && (Date.now() - cached.ts) < FDSO_CACHE_MS;
-
-    if (cacheFresh) {
-      liveFdso = cached.value;
-      setFieldValue(inputs.fdso, Math.round(liveFdso));
-      setStatus(fdsoStatusEl, true);
-    } else if (mstrPrice > 0) {
+    if (mstrPrice > 0) {
+      // Always recompute from the live MSTR price — no 24h cache.
       liveFdso = computeFdso(mstrPrice);
-      writeFdsoCache(liveFdso);
       setFieldValue(inputs.fdso, Math.round(liveFdso));
       setStatus(fdsoStatusEl, true);
-    } else if (cached) {
-      liveFdso = cached.value;
-      setFieldValue(inputs.fdso, Math.round(liveFdso));
-      setStatus(fdsoStatusEl, false, 'Live MSTR price unavailable — using last cached value.');
     } else {
       liveFdso = null;
       setFieldValue(inputs.fdso, DEFAULTS.fdso);
@@ -959,7 +928,7 @@
   // Fetches every live-sourced input fresh — used on initial load AND every
   // "Reset to defaults" click. Each field falls back to its last-known DEFAULTS
   // value independently if its own fetch fails, so one bad source doesn't block the rest.
-  // FDSO is recomputed at most once per 24h from the live MSTR price — see applyFdso() above.
+  // FDSO is recomputed from the live MSTR price on every refresh — see applyFdso() above.
   async function refreshAllLiveData() {
     setFetching(inputs.btcHeld, btcHeldStatusEl);
     setFetching(inputs.debt, debtStatusEl);
