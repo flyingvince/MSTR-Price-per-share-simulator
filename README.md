@@ -10,7 +10,7 @@ A single-page HTML simulator that models Strategy's (MSTR, Nasdaq) theoretical s
 | BTC held on balance sheet | ₿843,775 | |
 | Total debt outstanding (preferred + convertible) | $22,218,000,000 | |
 | USD cash reserve | $3,225,000,000 | |
-| Fully diluted shares outstanding (FDSO) | 424,479,000 shares | Recomputed live on load (see below); this is only the last-resort fallback |
+| Fully diluted shares outstanding (FDSO) | 424,510,000 shares | Recomputed live on load (see below); this is only the last-resort fallback |
 | mNAV | 1.0 | Slider range 0.9–1.1, step 0.01, synced with an editable number field |
 
 Share price is **not** a direct input — it's replaced by the computed "MSTR estimated price" output.
@@ -55,7 +55,7 @@ FDSO = basic shares outstanding + options outstanding + RSU/PSU unvested
          (i.e. MSTR's live price ≥ that tranche's conversion price)
 ```
 
-The disclosure figures (basic shares, options, RSU/PSU, and each convertible tranche's size/conversion price) only change on quarterly filings and have no CORS-open source, so they're hardcoded and refreshed manually from strategy.com/shares each quarter. As of the **2026-09-01** filing: 420,483k basic + 3,136k options + 860k RSU/PSU, plus any convertible tranches currently in-the-money. The one genuinely live input — MSTR's current price — is already fetched every refresh (see table above), so FDSO recomputes off real live data and matches the site's published figure.
+The disclosure figures (basic shares, options, RSU/PSU, and each convertible tranche's size/conversion price) only change on quarterly filings and have no CORS-open source, so they're hardcoded and refreshed manually from strategy.com/shares each quarter. As of the **2026-09-10** filing: 420,497k basic + 3,136k options + 877k RSU/PSU, plus any convertible tranches currently in-the-money. The one genuinely live input — MSTR's current price — is already fetched every refresh (see table above), so FDSO recomputes off real live data and matches the site's published figure.
 
 The result is recomputed from the live MSTR price on **every** refresh — no caching, so the FDSO figure always tracks the latest price. Only if the live price is unavailable does FDSO fall back to the hardcoded default in the table above.
 
