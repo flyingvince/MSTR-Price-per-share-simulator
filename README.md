@@ -11,7 +11,7 @@ A single-page HTML simulator that models Strategy's (MSTR, Nasdaq) theoretical s
 | Total debt outstanding (preferred + convertible) | $22,218,000,000 | |
 | USD cash reserve | $3,225,000,000 | |
 | Fully diluted shares outstanding (FDSO) | 426,059,000 shares | Recomputed live on load (see below); this is only the last-resort fallback |
-| mNAV | 1.0 | Slider range 0.9–1.1, step 0.01, synced with an editable number field |
+| mNAV | 1.0 | Slider range 1.00–1.25, step 0.01, synced with an editable number field |
 
 Share price is **not** a direct input — it's replaced by the computed "MSTR estimated price" output.
 
@@ -19,7 +19,7 @@ Share price is **not** a direct input — it's replaced by the computed "MSTR es
 
 - **BTC price**: "Current" (re-fetches the live price), "$75k", "$70k", "$65k", "$60k"
 - **FDSO**: "-2%", "-1%", "Current" (= the live FDSO value, or its hardcoded default if that's unavailable), "+1%", "+2%"
-- **mNAV**: "2x", "3x", "4x" (jumps the number field directly, even outside the slider's visible 0.9–1.1 track)
+- **mNAV**: "2x", "3x", "4x" (jumps the number field directly, even outside the slider's visible 1.00–1.25 track)
 
 Whichever preset button currently matches a field's value is highlighted — whether that state was reached by clicking the button, typing manually, live-fetching, or hitting Reset.
 

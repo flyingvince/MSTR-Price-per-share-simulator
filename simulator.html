@@ -401,7 +401,7 @@
       <div class="field">
         <label for="mnavRange">mNAV</label>
         <div class="mnav-row">
-          <input type="range" id="mnavRange" min="0.9" max="1.1" step="0.01" value="1.0">
+          <input type="range" id="mnavRange" min="1.0" max="1.25" step="0.01" value="1.0">
           <input type="text" id="mnavNum" value="1.00">
         </div>
         <div class="preset-row">
@@ -729,7 +729,7 @@
       let val = parseFloat(inputs.mnavNum.value);
       if (isNaN(val)) val = 1;
       val = Math.max(0, val);
-      inputs.mnavRange.value = val; // browser clamps the visible thumb to the 0.9-1.1 track
+      inputs.mnavRange.value = val; // browser clamps the visible thumb to the 1.0-1.25 track
       inputs.mnavNum.value = val.toFixed(2);
     }
   }
@@ -842,7 +842,7 @@
   document.querySelectorAll('.preset-btn[data-mnav-preset]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const val = parseFloat(btn.dataset.mnavPreset);
-      inputs.mnavRange.value = val; // clamps to the 0.9-1.1 track visually
+      inputs.mnavRange.value = val; // clamps to the 1.0-1.25 track visually
       inputs.mnavNum.value = val.toFixed(2);
       render();
     });
