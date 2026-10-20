@@ -496,7 +496,7 @@
     debt: 22218000000,
     cash: 3225000000,
     btcPrice: 63948,
-    fdso: 426186000,
+    fdso: 426322000,
     mnav: 1.0
   };
 
@@ -784,13 +784,13 @@
   // already fetched every refresh via fetchMstrKpiLive() below (mstrActualPrice),
   // so FDSO recomputes off real live data and matches the site's figure exactly:
   // last verified 2026-09-15 against strategy.com/shares (FDSO = 424,501 thousand);
-  // figures below refreshed 2026-10-13 from user-supplied data (FDSO = 426,186 thousand
+  // figures below refreshed 2026-10-20 from user-supplied data (FDSO = 426,322 thousand
   // while no convert is in-the-money).
   // FDSO is recomputed from the live MSTR price on every refresh — no caching.
   const FDSO_LATEST_ROW = {
-    asOf: '2026-10-13', // strategy.com/shares "Latest Shares Column"
-    basicSharesOutstanding: 422199,
-    optionsOutstanding: 3124,
+    asOf: '2026-10-20', // strategy.com/shares "Latest Shares Column"
+    basicSharesOutstanding: 422353,
+    optionsOutstanding: 3106,
     rsuPsuUnvested: 863,
     converts: [
       { shares: 5513, convPrice: 183.19 }, // 2028 convert
